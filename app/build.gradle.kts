@@ -153,6 +153,8 @@ android {
         // XMPlayer Sync API (https://xmplayer.app/developers.html): a public client id (xmpc_…) from XMPlayer ▸ Account ▸ Developer apps.
         buildConfigField("String", "XMPLAYER_CLIENT_ID", buildConfigString(resolveProperty(devProperties, localProperties, "XMPLAYER_CLIENT_ID")))
         buildConfigField("String", "TMDB_API_KEY", "\"${localProperties.getProperty("TMDB_API_KEY", "")}\"")
+        // TMDB host: TMDB itself, or a server that adds its own key (TMDB_API_BASE_URL in local.properties) so no key ships in the APK.
+        buildConfigField("String", "TMDB_API_BASE_URL", buildConfigString(localProperties.getProperty("TMDB_API_BASE_URL", "https://api.themoviedb.org/3/")))
         buildConfigField("String", "TV_LOGIN_WEB_BASE_URL", "\"${localProperties.getProperty("TV_LOGIN_WEB_BASE_URL", "https://nuvio.tv/tv-login")}\"")
         buildConfigField("String", "DEVICE_LOGIN_WEB_BASE_URL", "\"${localProperties.getProperty("DEVICE_LOGIN_WEB_BASE_URL", "https://nuvio.tv/link")}\"")
         buildConfigField("boolean", "DOVI_NATIVE_ENABLED", enableDoviNative.toString())
@@ -178,8 +180,8 @@ android {
         buildConfigField("String", "SPONSOR_NAMES", buildConfigString(sponsorNames))
         buildConfigField("String", "SENTRY_DSN", buildConfigString(sentryDsn))
 
-        // In-app updater (GitHub Releases)
-        buildConfigField("String", "GITHUB_OWNER", "\"NuvioMedia\"")
+        // In-app updater (GitHub Releases): this fork's own releases, signed with its own key.
+        buildConfigField("String", "GITHUB_OWNER", "\"Xerge-xmp\"")
         buildConfigField("String", "GITHUB_REPO", "\"NuvioTV\"")
     }
 
@@ -187,6 +189,8 @@ android {
     productFlavors {
         create("full") {
             dimension = "distribution"
+            // Its own package: installs beside the official Nuvio (com.nuvio.tv), which is signed with another key.
+            applicationId = "com.nuvio.tv.xmplayer"
             buildConfigField("boolean", "FEATURE_PLUGINS_ENABLED", "true")
             buildConfigField("boolean", "FEATURE_IN_APP_UPDATES_ENABLED", "true")
             buildConfigField("boolean", "FEATURE_IN_APP_TRAILERS_ENABLED", "true")

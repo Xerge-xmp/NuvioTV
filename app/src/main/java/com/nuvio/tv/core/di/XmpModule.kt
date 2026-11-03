@@ -5,12 +5,15 @@ import com.nuvio.tv.core.network.NoDelaySocketFactory
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.profile.ProfileScopedCredentialStore
 import com.nuvio.tv.data.local.ProfileDataStore
+import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.data.xmplayer.AndroidXmpAuthPersistence
 import com.nuvio.tv.data.xmplayer.AndroidXmpSyncStorage
 import com.nuvio.tv.data.xmplayer.OkHttpXmpEngine
 import com.nuvio.tv.data.xmplayer.XmpApiClient
 import com.nuvio.tv.data.xmplayer.XmpAuthRepository
 import com.nuvio.tv.data.xmplayer.XmpAuthStore
+import com.nuvio.tv.data.xmplayer.XmpBridge
+import com.nuvio.tv.data.xmplayer.XmpBridgeClient
 import com.nuvio.tv.data.xmplayer.XmpChangeStream
 import com.nuvio.tv.data.xmplayer.XmpConfiguration
 import com.nuvio.tv.data.xmplayer.XmpHttpClient
@@ -106,6 +109,46 @@ object XmpModule {
             auth,
             store
         )
+    )
+
+    /**
+     * Trakt and Simkl through XMPlayer (the profile's own XMPlayer link; no provider key or token in Nuvio). Its own
+     * connection, like the catalog: a link poll or a status read never waits behind sync.
+     */
+    @Provides
+    @Singleton
+    fun bridge(
+        configuration: XmpConfiguration,
+        auth: XmpAuthRepository,
+        store: XmpAuthStore,
+        factory: ProfileDataStoreFactory,
+        profiles: ProfileManager
+    ) = XmpBridge(
+        factory = factory,
+        activeProfileId = profiles.activeProfileId,
+        authStore = store,
+        auth = auth,
+        client = XmpBridgeClient(
+            XmpApiClient(
+                XmpHttpClient(
+                    XmpProbeEngine(
+                        OkHttpXmpEngine(
+                            OkHttpClient.Builder()
+                                .socketFactory(NoDelaySocketFactory)
+                                .connectTimeout(15, TimeUnit.SECONDS)
+                                .readTimeout(30, TimeUnit.SECONDS)
+                                .callTimeout(45, TimeUnit.SECONDS)
+                                .build(),
+                            configuration
+                        )
+                    )
+                ),
+                auth,
+                store
+            )
+        ),
+        configuration = configuration,
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     )
 
     /** XMPlayer as a Nuvio media server: the curated catalog aired by its ids, and the recordings. */

@@ -36,7 +36,11 @@ data class SimklSettingsUiState(
     val expiresAtEpochMs: Long? = null,
     val pollIntervalSeconds: Int = 5,
     val statusMessage: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** Connected through the XMPlayer profile's own Simkl link. */
+    val viaXmp: Boolean = false,
+    /** The pending connection is a link through XMPlayer. */
+    val linkingViaXmp: Boolean = false
 )
 
 @HiltViewModel
@@ -55,6 +59,10 @@ class SimklSettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            authRepository.refreshXmpBridge()
+            _uiState.update { it.copy(credentialsConfigured = authRepository.hasRequiredCredentials()) }
+        }
+        viewModelScope.launch {
             authRepository.state.collectLatest { state ->
                 _uiState.update { current ->
                     current.copy(
@@ -66,6 +74,8 @@ class SimklSettingsViewModel @Inject constructor(
                         verificationUri = state.pinSession?.verificationUri,
                         expiresAtEpochMs = state.pinSession?.expiresAtEpochMs,
                         pollIntervalSeconds = state.pinSession?.intervalSeconds ?: 5,
+                        viaXmp = state.viaXmp,
+                        linkingViaXmp = state.pinSession?.xmpLinkId != null,
                         errorMessage = state.error?.message()
                     )
                 }

@@ -1,5 +1,9 @@
 package com.nuvio.tv.data.simkl
 
+import com.nuvio.tv.data.xmplayer.XmpApiException
+import com.nuvio.tv.data.xmplayer.XmpBridge
+import com.nuvio.tv.data.xmplayer.XmpBridgeLinkPoll
+import com.nuvio.tv.data.xmplayer.XmpBridgeProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -13,25 +17,54 @@ class SimklAuthRepository(
     private val apiClient: SimklApiClient,
     private val configuration: SimklApiConfiguration,
     private val storage: SimklAuthStorage,
+    private val bridge: XmpBridge? = null,
     private val nowEpochMs: () -> Long = System::currentTimeMillis
 ) {
     @Inject
     constructor(
         apiClient: SimklApiClient,
         configuration: SimklApiConfiguration,
-        storage: SimklAuthStorage
-    ) : this(apiClient, configuration, storage, System::currentTimeMillis)
+        storage: SimklAuthStorage,
+        bridge: XmpBridge
+    ) : this(apiClient, configuration, storage, bridge, System::currentTimeMillis)
 
     private val mutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true }
 
     val state: StateFlow<SimklAuthState> = storage.state
 
-    fun hasRequiredCredentials(): Boolean = configuration.clientId.isNotBlank()
+    /** Simkl can be used here: this build's own Simkl app id, or Simkl through the connected XMPlayer profile. */
+    fun hasRequiredCredentials(): Boolean =
+        configuration.clientId.isNotBlank() || linksThroughXmp() || bridge?.activeNow(XmpBridgeProvider.SIMKL) == true
+
+    /** Connecting Simkl goes through XMPlayer: an XMPlayer profile is connected, with the Simkl bridge permission and a plan for it. */
+    fun linksThroughXmp(): Boolean = bridge?.state?.value?.let { it.connected && it.simkl.canLink } == true
+
+    /** Reads the connected XMPlayer profile's Simkl link again (a link made in XMPlayer shows here at once). */
+    suspend fun refreshXmpBridge() {
+        bridge?.refresh()
+    }
+
+    /** Simkl runs through XMPlayer on a plan without scrobbling (Premium): XMPlayer refuses scrobbles and watched writes. */
+    fun xmpScrobbleBlocked(): Boolean =
+        storage.state.value.viaXmp && bridge?.state?.value?.simkl?.scrobbleAllowed != true
 
     suspend fun startPinAuth(): SimklPinSession = mutex.withLock {
         val authScope = storage.currentScope()
-        if (!hasRequiredCredentials()) throw SimklAuthException(SimklAuthError.MISSING_CLIENT_ID)
+        val xmp = bridge
+        if (xmp != null && linksThroughXmp()) {
+            val link = xmp.startLink(XmpBridgeProvider.SIMKL)
+            val session = SimklPinSession(
+                userCode = link.code,
+                verificationUri = link.url,
+                expiresAtEpochMs = link.expiresAtEpochMs,
+                intervalSeconds = link.intervalSeconds,
+                xmpLinkId = link.linkId
+            )
+            if (!storage.savePinSession(session, authScope)) throw SimklAuthException(SimklAuthError.PIN_INVALIDATED)
+            return@withLock session
+        }
+        if (configuration.clientId.isBlank()) throw SimklAuthException(SimklAuthError.MISSING_CLIENT_ID)
         val response = executeAuthRequest(SimklApiRequest(SimklHttpMethod.GET, "/oauth/pin", requiresAuthentication = false))
         val payload = decodePinResponse(response.body)
         val userCode = payload.userCode?.trim()?.takeIf(String::isNotBlank)
@@ -62,6 +95,9 @@ class SimklAuthRepository(
             storage.clearPinSession(SimklAuthError.PIN_EXPIRED, authScope)
             return@withLock SimklPinPollResult.Expired
         }
+        val linkId = session.xmpLinkId
+        val xmp = bridge
+        if (linkId != null && xmp != null) return@withLock pollXmpLink(xmp, linkId, authScope)
         if (!PIN_PATTERN.matches(session.userCode)) {
             storage.clearPinSession(SimklAuthError.PIN_INVALIDATED, authScope)
             return@withLock SimklPinPollResult.Invalidated
@@ -132,6 +168,44 @@ class SimklAuthRepository(
             throw error
         } catch (_: Throwable) {
             Unit
+        }
+    }
+
+    private suspend fun pollXmpLink(xmp: XmpBridge, linkId: String, authScope: SimklAuthScope): SimklPinPollResult {
+        val result = try {
+            xmp.pollLink(XmpBridgeProvider.SIMKL, linkId)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: XmpApiException) {
+            if (error.status == 403 || error.status == 404) {
+                storage.clearPinSession(SimklAuthError.PIN_INVALIDATED, authScope)
+                return SimklPinPollResult.Invalidated
+            }
+            return SimklPinPollResult.Pending
+        } catch (_: Throwable) {
+            return SimklPinPollResult.Pending
+        }
+        return when (result) {
+            XmpBridgeLinkPoll.Pending -> SimklPinPollResult.Pending
+            is XmpBridgeLinkPoll.Linked -> {
+                storage.clearPinSession(null, authScope)
+                try {
+                    refreshUserSettings(scope = authScope)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Throwable) {
+                    Unit
+                }
+                SimklPinPollResult.Authorized
+            }
+            is XmpBridgeLinkPoll.Failed -> {
+                storage.clearPinSession(SimklAuthError.PIN_INVALIDATED, authScope)
+                SimklPinPollResult.Invalidated
+            }
+            XmpBridgeLinkPoll.Expired -> {
+                storage.clearPinSession(SimklAuthError.PIN_EXPIRED, authScope)
+                SimklPinPollResult.Expired
+            }
         }
     }
 

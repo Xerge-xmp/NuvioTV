@@ -1,5 +1,9 @@
 package com.nuvio.tv.core.trakt
 
+import com.nuvio.tv.data.xmplayer.XmpBridge
+import com.nuvio.tv.data.xmplayer.XmpBridgeState
+import io.mockk.every
+import kotlinx.coroutines.flow.MutableStateFlow
 import android.content.Context
 import com.nuvio.tv.R
 import com.nuvio.tv.core.network.NetworkResult
@@ -307,7 +311,11 @@ class TraktPublicListSourceResolverTest {
             context = context,
             traktApi = api,
             traktAuthDataStore = authStore,
-            authSessionNoticeDataStore = mockk<AuthSessionNoticeDataStore>(relaxed = true)
+            authSessionNoticeDataStore = mockk<AuthSessionNoticeDataStore>(relaxed = true),
+            xmpBridge = mockk<XmpBridge>(relaxed = true) {
+                every { state } returns MutableStateFlow(XmpBridgeState())
+                every { activeNow(any()) } returns false
+            }
         )
         return TraktPublicListSourceResolver(
             appContext = context,

@@ -3511,4 +3511,13 @@
     <string name="xmp_server_problem_not_connected_message">Connect XMPlayer in Settings › Tracking.</string>
     <string name="xmp_server_problem_failed">XMPlayer did not answer</string>
     <string name="xmp_server_problem_failed_message">Check the connection and retry.</string>
+    <!-- Trakt / Simkl through XMPlayer (the connected XMPlayer profile's own link) -->
+    <string name="xmp_bridge_connected_as">Connected as %1$s · through XMPlayer</string>
+    <string name="xmp_bridge_trakt_connected_description">Trakt through your XMPlayer profile: nothing to sign in to here. Disconnecting stops using it on this profile; the link stays in XMPlayer.</string>
+    <string name="xmp_bridge_simkl_connected_description">Simkl through your XMPlayer profile: nothing to sign in to here. Disconnecting stops using it on this profile; the link stays in XMPlayer.</string>
+    <string name="xmp_bridge_trakt_instruction">Scan the code or open the address on your phone, then sign in to Trakt. It links Trakt to your XMPlayer profile, so XMPlayer and Nuvio both use it.</string>
+    <string name="xmp_bridge_simkl_instruction">Scan the code or open the address on your phone, then sign in to Simkl. It links Simkl to your XMPlayer profile, so XMPlayer and Nuvio both use it.</string>
+    <string name="xmp_bridge_premium_required">Trakt and Simkl through XMPlayer need XMPlayer Premium or Pro.</string>
+    <string name="xmp_bridge_reconnect_required">Disconnect and connect XMPlayer again to allow Trakt and Simkl through XMPlayer.</string>
+    <string name="xmp_bridge_link_failed">Linking through XMPlayer did not finish (%1$s).</string>
 </resources>

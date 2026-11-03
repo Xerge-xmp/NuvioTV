@@ -1,5 +1,10 @@
 package com.nuvio.tv.core.di
 
+import com.nuvio.tv.data.local.TraktAuthDataStore
+import com.nuvio.tv.data.xmplayer.XMP_BRIDGE_TOKEN
+import com.nuvio.tv.data.xmplayer.XmpBridge
+import com.nuvio.tv.data.xmplayer.XmpBridgeInterceptor
+import com.nuvio.tv.data.xmplayer.XmpBridgeProvider
 import android.content.Context
 import android.util.Log
 import com.nuvio.tv.BuildConfig
@@ -209,11 +214,35 @@ object NetworkModule {
     @Provides
     @Singleton
     @Named("simkl")
-    fun provideSimklOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+    fun provideSimklOkHttpClient(
+        xmpBridge: XmpBridge,
+        simklAuthStorage: SimklAuthStorage,
+        simklConfiguration: SimklApiConfiguration
+    ): OkHttpClient = OkHttpClient.Builder()
         .dns(IPv4FirstDns())
         .socketFactory(NoDelaySocketFactory)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
+        // Simkl through XMPlayer: a bridged profile's calls (and, without this build's own Simkl app id, the public title
+        // lookups) go to XMPlayer's passthrough, which adds its own client id and the profile's Simkl token.
+        .addInterceptor(
+            XmpBridgeInterceptor(
+                bridge = xmpBridge,
+                provider = XmpBridgeProvider.SIMKL,
+                stripHeaders = setOf("Authorization"),
+                stripQuery = setOf("client_id", "app-name", "app-version")
+            ) { request ->
+                val authorization = request.header("Authorization")
+                val bridge = xmpBridge.state.value
+                when {
+                    request.url.pathSegments.firstOrNull() == "oauth" -> false
+                    authorization == "Bearer $XMP_BRIDGE_TOKEN" -> true
+                    authorization != null -> false
+                    bridge.active(XmpBridgeProvider.SIMKL) -> simklAuthStorage.authorization()?.accessToken == XMP_BRIDGE_TOKEN
+                    else -> simklConfiguration.clientId.isBlank() && bridge.connected && bridge.simkl.canLink
+                }
+            }
+        )
         .build()
 
     @Provides
@@ -243,7 +272,9 @@ object NetworkModule {
     @Singleton
     @Named("trakt")
     fun provideTraktOkHttpClient(
-        okHttpClient: OkHttpClient
+        okHttpClient: OkHttpClient,
+        xmpBridge: XmpBridge,
+        traktAuthDataStore: TraktAuthDataStore
     ): OkHttpClient = okHttpClient.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
@@ -298,6 +329,23 @@ object NetworkModule {
                 throw error
             }
         }
+        // Trakt through XMPlayer: a bridged profile's calls go to XMPlayer's passthrough with the XMPlayer token
+        // (no Trakt key or token from this device). Sign-in endpoints never go through it.
+        .addInterceptor(
+            XmpBridgeInterceptor(
+                bridge = xmpBridge,
+                provider = XmpBridgeProvider.TRAKT,
+                stripHeaders = setOf("trakt-api-key", "Authorization")
+            ) { request ->
+                val authorization = request.header("Authorization")
+                when {
+                    request.url.pathSegments.firstOrNull() == "oauth" -> false
+                    authorization == "Bearer $XMP_BRIDGE_TOKEN" -> true
+                    authorization != null -> false
+                    else -> kotlinx.coroutines.runBlocking { traktAuthDataStore.getCurrentState().viaXmp }
+                }
+            }
+        )
         .build()
 
     @Provides
@@ -317,7 +365,7 @@ object NetworkModule {
     @Named("tmdb")
     fun provideTmdbRetrofit(okHttpClient: OkHttpClient, moshi: Moshi): Retrofit =
         Retrofit.Builder()
-            .baseUrl("https://api.themoviedb.org/3/")
+            .baseUrl(BuildConfig.TMDB_API_BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()

@@ -24,7 +24,7 @@ internal class ProbeOut(private val id: String) {
 }
 
 /**
- * `am broadcast -n com.nuvio.tv/com.nuvio.tv.probe.ProbeReceiver --es id <n> --es cmd <command> --es args64 <base64>`
+ * `am broadcast -n com.nuvio.tv.xmplayer/com.nuvio.tv.probe.ProbeReceiver --es id <n> --es cmd <command> --es args64 <base64>`
  * (args64: the arguments joined by newlines, base64 — so spaces and quotes need no shell escaping).
  * The command runs on the main thread in the probe's own scope; `tools/nuvio-drive.js` sends and reads these.
  */

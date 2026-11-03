@@ -1,5 +1,9 @@
 package com.nuvio.tv.data.repository
 
+import com.nuvio.tv.data.xmplayer.XmpBridge
+import com.nuvio.tv.data.xmplayer.XmpBridgeState
+import io.mockk.every
+import kotlinx.coroutines.flow.MutableStateFlow
 import android.content.Context
 import com.nuvio.tv.data.local.AuthSessionNoticeDataStore
 import com.nuvio.tv.data.local.TraktAuthDataStore
@@ -31,7 +35,11 @@ class TraktAuthServiceTest {
             context = mockk<Context>(relaxed = true),
             traktApi = traktApi,
             traktAuthDataStore = traktAuthDataStore,
-            authSessionNoticeDataStore = authSessionNoticeDataStore
+            authSessionNoticeDataStore = authSessionNoticeDataStore,
+            xmpBridge = mockk<XmpBridge>(relaxed = true) {
+                every { state } returns MutableStateFlow(XmpBridgeState())
+                every { activeNow(any()) } returns false
+            }
         )
 
         assertFalse(service.refreshTokenIfNeeded(force = true))

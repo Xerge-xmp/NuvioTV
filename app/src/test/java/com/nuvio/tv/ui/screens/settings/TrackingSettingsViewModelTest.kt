@@ -1,5 +1,8 @@
 package com.nuvio.tv.ui.screens.settings
 
+import com.nuvio.tv.data.xmplayer.XmpAuthScope
+import com.nuvio.tv.data.xmplayer.XmpAuthState
+import com.nuvio.tv.data.xmplayer.XmpAuthStore
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.tracking.TrackingProviderId
@@ -55,7 +58,10 @@ class TrackingSettingsViewModelTest {
         }
         val trakt = mockk<TraktAuthDataStore> { every { state } returns flowOf(TraktAuthState()) }
         val simkl = mockk<SimklAuthRepository> { every { state } returns MutableStateFlow(SimklAuthState()) }
-        val viewModel = TrackingSettingsViewModel(controller, settings, mockk(), trakt, simkl, harness.store, profiles)
+        // The XMPlayer store follows the active profile like the other credential stores (not connected on either).
+        val xmpState = MutableStateFlow(XmpAuthState(scope = XmpAuthScope(1, 0)))
+        val xmp = mockk<XmpAuthStore> { every { state } returns xmpState }
+        val viewModel = TrackingSettingsViewModel(controller, settings, mockk(), trakt, simkl, harness.store, xmp, profiles)
         runCurrent()
         assertEquals(setOf(TrackingProviderId.MDBLIST), viewModel.uiState.value.connectedProviderIds)
         val previousCount = reconciliations.size
@@ -64,6 +70,7 @@ class TrackingSettingsViewModelTest {
         assertFalse(viewModel.uiState.value.isReady)
         assertEquals(previousCount, reconciliations.size)
         harness.store.selectProfile(2)
+        xmpState.value = XmpAuthState(scope = XmpAuthScope(2, 0))
         runCurrent()
         assertTrue(viewModel.uiState.value.isReady)
         assertEquals(WatchProgressSource.MDBLIST, viewModel.uiState.value.watchProgressSource)

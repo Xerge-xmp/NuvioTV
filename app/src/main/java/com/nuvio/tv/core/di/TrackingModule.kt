@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.di
 
+import com.nuvio.tv.data.simkl.XmpBridgedSimklAuthStorage
 import com.nuvio.tv.data.simkl.AndroidSimklAuthStorage
 import com.nuvio.tv.data.simkl.AndroidSimklSyncStorage
 import com.nuvio.tv.data.simkl.SimklAuthStorage
@@ -66,7 +67,7 @@ abstract class TrackingModule {
 
     @Binds
     @Singleton
-    abstract fun bindSimklAuthStorage(storage: AndroidSimklAuthStorage): SimklAuthStorage
+    abstract fun bindSimklAuthStorage(storage: XmpBridgedSimklAuthStorage): SimklAuthStorage
 
     @Binds
     @IntoSet

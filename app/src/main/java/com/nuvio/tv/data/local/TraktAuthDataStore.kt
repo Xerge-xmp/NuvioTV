@@ -1,6 +1,12 @@
 package com.nuvio.tv.data.local
 
+import com.nuvio.tv.data.xmplayer.XMP_LINK_DEVICE_PREFIX
 import androidx.datastore.preferences.core.edit
+import com.nuvio.tv.data.xmplayer.XMP_BRIDGE_TOKEN
+import com.nuvio.tv.data.xmplayer.XmpBridge
+import com.nuvio.tv.data.xmplayer.XmpBridgeProvider
+import com.nuvio.tv.data.xmplayer.XmpBridgeState
+import kotlinx.coroutines.flow.combine
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -38,17 +44,24 @@ data class TraktAuthState(
     val userCode: String? = null,
     val verificationUrl: String? = null,
     val expiresAt: Long? = null,
-    val pollInterval: Int? = null
+    val pollInterval: Int? = null,
+    /** Trakt through XMPlayer: the connected XMPlayer profile's own Trakt link; no Trakt token on this device. */
+    val viaXmp: Boolean = false
 ) {
     val isAuthenticated: Boolean
         get() = !accessToken.isNullOrBlank() && !refreshToken.isNullOrBlank()
+
+    /** The pending sign-in is a link through XMPlayer (its code and address are XMPlayer's, not trakt.tv/activate). */
+    val linkingViaXmp: Boolean
+        get() = deviceCode?.startsWith(XMP_LINK_DEVICE_PREFIX) == true
 }
 
 @Singleton
 @OptIn(ExperimentalCoroutinesApi::class)
 class TraktAuthDataStore @Inject constructor(
     private val factory: ProfileDataStoreFactory,
-    private val profileManager: ProfileManager
+    private val profileManager: ProfileManager,
+    private val xmpBridge: XmpBridge
 ) {
     companion object {
         private const val FEATURE = "trakt_auth_store"
@@ -72,7 +85,7 @@ class TraktAuthDataStore @Inject constructor(
     private fun store(profileId: Int = profileManager.activeProfileId.value) =
         factory.get(profileId, FEATURE)
 
-    val state: Flow<TraktAuthState> = profileManager.activeProfileId.flatMapLatest { profileId ->
+    private val directState: Flow<TraktAuthState> = profileManager.activeProfileId.flatMapLatest { profileId ->
         store(profileId).data.map { preferences ->
             TraktAuthState(
                 accessToken = preferences[accessTokenKey],
@@ -91,6 +104,12 @@ class TraktAuthDataStore @Inject constructor(
         }
     }
 
+    /**
+     * The profile's Trakt: its own sign-in when it has one; otherwise, when the connected XMPlayer profile has Trakt linked
+     * (and the plan allows it), Trakt through XMPlayer. Never both — one path, so nothing is scrobbled twice.
+     */
+    val state: Flow<TraktAuthState> = combine(directState, xmpBridge.state) { direct, bridge -> merged(direct, bridge) }
+
     val isAuthenticated: Flow<Boolean> = state.map { it.isAuthenticated }
 
     val isEffectivelyAuthenticated: Flow<Boolean> = isAuthenticated
@@ -99,7 +118,11 @@ class TraktAuthDataStore @Inject constructor(
         return getCurrentState(profileManager.activeProfileId.value)
     }
 
-    suspend fun getCurrentState(profileId: Int): TraktAuthState {
+    suspend fun getCurrentState(profileId: Int): TraktAuthState =
+        merged(getDirectState(profileId), xmpBridge.stateFor(profileId))
+
+    /** This device's own Trakt sign-in only (tokens, device flow), without the XMPlayer link. */
+    suspend fun getDirectState(profileId: Int = profileManager.activeProfileId.value): TraktAuthState {
         val prefs = store(profileId).data.first()
         return TraktAuthState(
             accessToken = prefs[accessTokenKey],
@@ -114,6 +137,21 @@ class TraktAuthDataStore @Inject constructor(
             verificationUrl = prefs[verificationUrlKey],
             expiresAt = prefs[expiresAtKey],
             pollInterval = prefs[pollIntervalKey]
+        )
+    }
+
+    private fun merged(direct: TraktAuthState, bridge: XmpBridgeState): TraktAuthState {
+        if (direct.isAuthenticated || !bridge.active(XmpBridgeProvider.TRAKT)) return direct
+        return direct.copy(
+            accessToken = XMP_BRIDGE_TOKEN,
+            refreshToken = XMP_BRIDGE_TOKEN,
+            tokenType = "bearer",
+            createdAt = null,
+            expiresIn = null,
+            username = bridge.trakt.account ?: direct.username,
+            // Trakt reads "me" as the signed-in user, so user paths work without the slug.
+            userSlug = "me",
+            viaXmp = true
         )
     }
 

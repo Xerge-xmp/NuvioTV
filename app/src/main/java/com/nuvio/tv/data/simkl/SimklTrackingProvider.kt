@@ -44,6 +44,14 @@ class SimklTrackingScrobbler @Inject constructor(
             )
             return
         }
+        // Through XMPlayer on Premium: scrobbling is a Pro feature there, so don't send what XMPlayer refuses.
+        if (authRepository.xmpScrobbleBlocked()) {
+            Log.d(
+                TRACKING_SCROBBLE_DIAGNOSTIC_TAG,
+                "simkl adapter skipped action=${action.wireValue} reason=xmplayer_plan"
+            )
+            return
+        }
         syncRepository.ensureLoaded()
         val entryIndex = syncRepository.currentEntryIndex()
         val enrichedEvent = event.copy(

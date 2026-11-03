@@ -86,6 +86,8 @@ class TraktScrobbleService @Inject constructor(
         val activeProfileId = profileManager.activeProfileId.value
         if (!traktAuthService.getCurrentAuthState().isAuthenticated) return
         if (!traktAuthService.hasRequiredCredentials()) return
+        // Through XMPlayer on Premium: scrobbling is a Pro feature there, so don't send what XMPlayer refuses.
+        if (traktAuthService.xmpScrobbleBlocked()) return
 
         val clampedProgress = progressPercent.coerceIn(0f, 100f)
         if (shouldSkip(activeProfileId, action, item.itemKey, clampedProgress)) return

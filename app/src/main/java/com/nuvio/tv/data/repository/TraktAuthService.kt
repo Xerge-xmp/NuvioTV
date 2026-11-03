@@ -1,5 +1,11 @@
 package com.nuvio.tv.data.repository
 
+import com.nuvio.tv.data.xmplayer.XMP_LINK_DEVICE_PREFIX as XMP_LINK_PREFIX
+import com.nuvio.tv.data.xmplayer.XMP_BRIDGE_ERROR_HEADER
+import com.nuvio.tv.data.xmplayer.XmpApiException
+import com.nuvio.tv.data.xmplayer.XmpBridge
+import com.nuvio.tv.data.xmplayer.XmpBridgeLinkPoll
+import com.nuvio.tv.data.xmplayer.XmpBridgeProvider
 import android.content.Context
 import android.util.Log
 import com.nuvio.tv.BuildConfig
@@ -39,7 +45,8 @@ class TraktAuthService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val traktApi: TraktApi,
     private val traktAuthDataStore: TraktAuthDataStore,
-    private val authSessionNoticeDataStore: AuthSessionNoticeDataStore
+    private val authSessionNoticeDataStore: AuthSessionNoticeDataStore,
+    private val xmpBridge: XmpBridge
 ) {
     private val refreshLeewaySeconds = 60L
     private val writeRequestMutex = Mutex()
@@ -117,14 +124,41 @@ class TraktAuthService @Inject constructor(
         return BuildConfig.TRAKT_REDIRECT_URI.ifBlank { "urn:ietf:wg:oauth:2.0:oob" }
     }
 
-    fun hasRequiredCredentials(): Boolean {
+    /** Trakt can be used here: this build's own Trakt app, or Trakt through the connected XMPlayer profile. */
+    fun hasRequiredCredentials(): Boolean = hasDirectCredentials() || linksThroughXmp() || traktAuthViaXmpNow()
+
+    /** This build carries its own Trakt app (id + secret) for signing in directly. */
+    fun hasDirectCredentials(): Boolean {
         return BuildConfig.TRAKT_CLIENT_ID.isNotBlank() && BuildConfig.TRAKT_CLIENT_SECRET.isNotBlank()
+    }
+
+    /**
+     * Connecting Trakt goes through XMPlayer: an XMPlayer profile is connected, has the Trakt bridge permission and a
+     * plan that allows it. XMPlayer users link once (in XMPlayer or here) and need nothing else.
+     */
+    fun linksThroughXmp(): Boolean {
+        val bridge = xmpBridge.state.value
+        return bridge.connected && bridge.trakt.canLink
+    }
+
+    private fun traktAuthViaXmpNow(): Boolean = xmpBridge.activeNow(XmpBridgeProvider.TRAKT)
+
+    /** Reads the connected XMPlayer profile's Trakt / Simkl link again (a link made in XMPlayer shows here at once). */
+    suspend fun refreshXmpBridge() {
+        xmpBridge.refresh()
+    }
+
+    /** Trakt runs through XMPlayer on a plan without scrobbling (Premium): XMPlayer refuses scrobbles and watched writes. */
+    suspend fun xmpScrobbleBlocked(): Boolean {
+        if (!getCurrentAuthState().viaXmp) return false
+        return !xmpBridge.state.value.trakt.scrobbleAllowed
     }
 
     suspend fun getCurrentAuthState(): TraktAuthState = traktAuthDataStore.getCurrentState()
 
     suspend fun startDeviceAuth(): Result<TraktDeviceCodeResponseDto> {
-        if (!hasRequiredCredentials()) {
+        if (linksThroughXmp()) return startXmpLink()
+        if (!hasDirectCredentials()) {
             return Result.failure(IllegalStateException(context.getString(R.string.trakt_error_missing_credentials)))
         }
 
@@ -198,12 +232,13 @@ class TraktAuthService @Inject constructor(
     }
 
     suspend fun pollDeviceToken(): TraktTokenPollResult {
-        if (!hasRequiredCredentials()) {
-            return TraktTokenPollResult.Failed(context.getString(R.string.trakt_error_missing_credentials))
-        }
-
         val state = getCurrentAuthState()
         val deviceCode = state.deviceCode
+        if (deviceCode?.startsWith(XMP_LINK_PREFIX) == true) return pollXmpLink(deviceCode.removePrefix(XMP_LINK_PREFIX))
+
+        if (!hasDirectCredentials()) {
+            return TraktTokenPollResult.Failed(context.getString(R.string.trakt_error_missing_credentials))
+        }
         if (deviceCode.isNullOrBlank()) {
             return TraktTokenPollResult.Failed(context.getString(R.string.trakt_error_no_active_device_code))
         }
@@ -259,8 +294,94 @@ class TraktAuthService @Inject constructor(
         }
     }
 
+    /**
+     * Links Trakt to the connected XMPlayer profile: XMPlayer answers a short code and an address (shown as the QR); the
+     * user signs in to Trakt there. Kept in the same device-flow fields as a direct sign-in, so the screen is the same.
+     */
+    private suspend fun startXmpLink(): Result<TraktDeviceCodeResponseDto> {
+        val state = getCurrentAuthState()
+        val existing = state.deviceCode
+        val existingExpiresAt = state.expiresAt
+        if (existing?.startsWith(XMP_LINK_PREFIX) == true && existingExpiresAt != null && System.currentTimeMillis() < existingExpiresAt) {
+            return Result.success(
+                TraktDeviceCodeResponseDto(
+                    deviceCode = existing,
+                    userCode = state.userCode.orEmpty(),
+                    verificationUrl = state.verificationUrl.orEmpty(),
+                    expiresIn = ((existingExpiresAt - System.currentTimeMillis()) / 1000L).coerceAtLeast(0L).toInt(),
+                    interval = state.pollInterval ?: 5
+                )
+            )
+        }
+        val link = try {
+            xmpBridge.startLink(XmpBridgeProvider.TRAKT)
+        } catch (e: XmpApiException) {
+            Log.w("TraktAuthService", "XMPlayer Trakt link failed to start: ${e.message}")
+            return Result.failure(IllegalStateException(xmpErrorMessage(e)))
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w("TraktAuthService", "XMPlayer Trakt link failed to start: ${e.message}")
+            return Result.failure(IllegalStateException(context.getString(R.string.trakt_error_network_retry)))
+        }
+        val flow = TraktDeviceCodeResponseDto(
+            deviceCode = XMP_LINK_PREFIX + link.linkId,
+            userCode = link.code,
+            verificationUrl = link.url,
+            expiresIn = ((link.expiresAtEpochMs - System.currentTimeMillis()) / 1000L).coerceAtLeast(1L).toInt(),
+            interval = link.intervalSeconds
+        )
+        traktAuthDataStore.saveDeviceFlow(flow)
+        return Result.success(flow)
+    }
+
+    private suspend fun pollXmpLink(linkId: String): TraktTokenPollResult {
+        val result = try {
+            xmpBridge.pollLink(XmpBridgeProvider.TRAKT, linkId)
+        } catch (e: XmpApiException) {
+            if (e.status == 403 || e.status == 404) {
+                traktAuthDataStore.clearDeviceFlow()
+                return TraktTokenPollResult.Failed(xmpErrorMessage(e))
+            }
+            Log.w("TraktAuthService", "XMPlayer Trakt link poll failed: ${e.message}")
+            return TraktTokenPollResult.Pending
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w("TraktAuthService", "XMPlayer Trakt link poll failed: ${e.message}")
+            return TraktTokenPollResult.Pending
+        }
+        return when (result) {
+            XmpBridgeLinkPoll.Pending -> TraktTokenPollResult.Pending
+            is XmpBridgeLinkPoll.Linked -> {
+                traktAuthDataStore.clearDeviceFlow()
+                authSessionNoticeDataStore.markTraktAuthenticated()
+                resetCircuit()
+                TraktTokenPollResult.Approved(result.account ?: getCurrentAuthState().username)
+            }
+            is XmpBridgeLinkPoll.Failed -> {
+                traktAuthDataStore.clearDeviceFlow()
+                if (result.reason == "access_denied") {
+                    TraktTokenPollResult.Denied
+                } else {
+                    TraktTokenPollResult.Failed(context.getString(R.string.xmp_bridge_link_failed, result.reason ?: "-"))
+                }
+            }
+            XmpBridgeLinkPoll.Expired -> {
+                traktAuthDataStore.clearDeviceFlow()
+                TraktTokenPollResult.Expired
+            }
+        }
+    }
+
+    private fun xmpErrorMessage(e: XmpApiException): String = when (e.code) {
+        "premium_required" -> context.getString(R.string.xmp_bridge_premium_required)
+        "scope_required", "insufficient_scope" -> context.getString(R.string.xmp_bridge_reconnect_required)
+        else -> context.getString(R.string.xmp_bridge_link_failed, e.code ?: (e.status?.toString() ?: "-"))
+    }
+
     suspend fun refreshTokenIfNeeded(force: Boolean = false): Boolean {
-        if (!hasRequiredCredentials()) return false
+        // Through XMPlayer there is no Trakt token here to refresh: XMPlayer keeps the link's token current.
+        if (getCurrentAuthState().viaXmp) return !force
+        if (!hasDirectCredentials()) return false
 
         return tokenRefreshMutex.withLock {
             val state = getCurrentAuthState()
@@ -304,7 +425,14 @@ class TraktAuthService @Inject constructor(
 
     suspend fun revokeAndLogout() {
         val state = getCurrentAuthState()
-        if (hasRequiredCredentials()) {
+        if (state.viaXmp) {
+            // Stop using XMPlayer's Trakt link on this device's profile; the link itself stays in XMPlayer.
+            xmpBridge.setOptedOut(XmpBridgeProvider.TRAKT, true)
+            traktAuthDataStore.clearDeviceFlow()
+            authSessionNoticeDataStore.markTraktExplicitLogout()
+            return
+        }
+        if (hasDirectCredentials()) {
             state.accessToken?.let { accessToken ->
                 runCatching {
                     traktApi.revokeToken(
@@ -368,6 +496,12 @@ class TraktAuthService @Inject constructor(
 
             if (response.isSuccessful) {
                 resetCircuit()
+                return response
+            }
+
+            // XMPlayer's own refusal (plan, link gone, path) is not a broken Trakt key: it never trips the breaker.
+            if (response.raw().header(XMP_BRIDGE_ERROR_HEADER) != null) {
+                trace("authorized request: XMPlayer refused $code for ${responseTarget(response)}")
                 return response
             }
 
@@ -448,6 +582,11 @@ class TraktAuthService @Inject constructor(
 
             if (response.isSuccessful) {
                 resetCircuit()
+                return response
+            }
+
+            if (response.raw().header(XMP_BRIDGE_ERROR_HEADER) != null) {
+                trace("public request: XMPlayer refused $code for ${responseTarget(response)}")
                 return response
             }
 
@@ -533,6 +672,10 @@ class TraktAuthService @Inject constructor(
     }
 
     private suspend fun invalidateCredentials(statusCode: Int) {
+        if (getCurrentAuthState().viaXmp) {
+            xmpBridge.onLinkLost(XmpBridgeProvider.TRAKT)
+            return
+        }
         authSessionNoticeDataStore.markTraktReconnectRequired()
         traktAuthDataStore.clearAuth()
         tripCircuit("Token refresh returned $statusCode")

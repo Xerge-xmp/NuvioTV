@@ -91,10 +91,12 @@ internal fun TraktAccountDialog(
                 logo = logo,
                 logoContentDescription = stringResource(R.string.cd_trakt_logo),
                 connectedLabel = stringResource(
-                    R.string.trakt_connected_as,
+                    if (state.viaXmp) R.string.xmp_bridge_connected_as else R.string.trakt_connected_as,
                     state.username ?: stringResource(R.string.trakt_user_fallback)
                 ),
-                connectedDescription = stringResource(R.string.trakt_description),
+                connectedDescription = stringResource(
+                    if (state.viaXmp) R.string.xmp_bridge_trakt_connected_description else R.string.trakt_description
+                ),
                 statusMessage = state.statusMessage,
                 errorMessage = state.errorMessage,
                 isLoading = state.isLoading,
@@ -118,13 +120,16 @@ internal fun TraktAccountDialog(
             suppressFirstKeyUp = false
         ) {
             val displayUrl = state.verificationUrl ?: TRAKT_ACTIVATION_URL
-            val qrUrl = state.deviceUserCode?.let { "$TRAKT_ACTIVATION_URL/$it" } ?: displayUrl
+            // An XMPlayer link's address already carries its code (…/link/<code>); Trakt's own takes /<code>.
+            val qrUrl = if (state.linkingViaXmp) displayUrl else state.deviceUserCode?.let { "$TRAKT_ACTIVATION_URL/$it" } ?: displayUrl
             TrackingDeviceAuthContent(
                 providerName = stringResource(R.string.trakt_name),
                 logo = logo,
                 logoContentDescription = stringResource(R.string.cd_trakt_logo),
                 qrContentDescription = stringResource(R.string.cd_trakt_qr),
-                instruction = stringResource(R.string.trakt_awaiting_instruction),
+                instruction = stringResource(
+                    if (state.linkingViaXmp) R.string.xmp_bridge_trakt_instruction else R.string.trakt_awaiting_instruction
+                ),
                 userCode = state.deviceUserCode,
                 displayUrl = displayUrl,
                 qrUrl = qrUrl,
@@ -207,10 +212,12 @@ internal fun SimklAccountDialog(
                             logo = logo,
                             logoContentDescription = stringResource(R.string.cd_simkl_logo),
                             connectedLabel = stringResource(
-                                R.string.simkl_connected_as,
+                                if (state.viaXmp) R.string.xmp_bridge_connected_as else R.string.simkl_connected_as,
                                 state.username ?: stringResource(R.string.simkl_user_fallback)
                             ),
-                            connectedDescription = stringResource(R.string.simkl_description),
+                            connectedDescription = stringResource(
+                                if (state.viaXmp) R.string.xmp_bridge_simkl_connected_description else R.string.simkl_description
+                            ),
                             statusMessage = state.statusMessage,
                             errorMessage = state.errorMessage,
                             isLoading = state.isLoading,
@@ -248,7 +255,9 @@ internal fun SimklAccountDialog(
                 logo = logo,
                 logoContentDescription = stringResource(R.string.cd_simkl_logo),
                 qrContentDescription = stringResource(R.string.cd_simkl_qr),
-                instruction = stringResource(R.string.simkl_awaiting_instruction),
+                instruction = stringResource(
+                    if (state.linkingViaXmp) R.string.xmp_bridge_simkl_instruction else R.string.simkl_awaiting_instruction
+                ),
                 userCode = state.userCode,
                 displayUrl = state.verificationUri,
                 qrUrl = state.verificationUri,

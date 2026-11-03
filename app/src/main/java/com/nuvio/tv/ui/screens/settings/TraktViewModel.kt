@@ -46,7 +46,11 @@ data class TraktUiState(
     val connectedStats: TraktProgressService.TraktCachedStats? = null,
     val statusMessage: String? = null,
     val errorMessage: String? = null,
-    val moreLikeThisSource: MoreLikeThisSourcePreference = TraktSettingsDataStore.DEFAULT_MORE_LIKE_THIS_SOURCE
+    val moreLikeThisSource: MoreLikeThisSourcePreference = TraktSettingsDataStore.DEFAULT_MORE_LIKE_THIS_SOURCE,
+    /** Connected through the XMPlayer profile's own Trakt link. */
+    val viaXmp: Boolean = false,
+    /** The pending connection is a link through XMPlayer. */
+    val linkingViaXmp: Boolean = false
 )
 
 @HiltViewModel
@@ -68,6 +72,10 @@ class TraktViewModel @Inject constructor(
     init {
         _uiState.update {
             it.copy(credentialsConfigured = traktAuthService.hasRequiredCredentials())
+        }
+        viewModelScope.launch {
+            traktAuthService.refreshXmpBridge()
+            _uiState.update { it.copy(credentialsConfigured = traktAuthService.hasRequiredCredentials()) }
         }
         observeSettings()
         observeAuthState()
@@ -279,6 +287,8 @@ class TraktViewModel @Inject constructor(
                 verificationUrl = authState.verificationUrl,
                 pollIntervalSeconds = authState.pollInterval ?: 5,
                 deviceCodeExpiresAtMillis = authState.expiresAt,
+                viaXmp = authState.viaXmp,
+                linkingViaXmp = authState.linkingViaXmp,
                 credentialsConfigured = traktAuthService.hasRequiredCredentials(),
                 isPolling = if (mode == TraktConnectionMode.CONNECTED) false else current.isPolling,
                 connectedStats = if (mode == TraktConnectionMode.CONNECTED && !connectedIdentityChanged) {

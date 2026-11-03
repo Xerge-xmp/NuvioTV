@@ -744,7 +744,7 @@ private fun traktConnectionPresentation(state: TraktUiState): TrackingConnection
         )
         state.mode == TraktConnectionMode.CONNECTED -> TrackingConnectionPresentation(
             subtitle = stringResource(
-                R.string.trakt_connected_as,
+                if (state.viaXmp) R.string.xmp_bridge_connected_as else R.string.trakt_connected_as,
                 state.username ?: stringResource(R.string.trakt_user_fallback)
             ),
             value = stringResource(R.string.tracking_status_connected),
@@ -773,7 +773,7 @@ private fun simklConnectionPresentation(state: SimklSettingsUiState): TrackingCo
         )
         state.mode == SimklConnectionMode.CONNECTED -> TrackingConnectionPresentation(
             subtitle = stringResource(
-                R.string.simkl_connected_as,
+                if (state.viaXmp) R.string.xmp_bridge_connected_as else R.string.simkl_connected_as,
                 state.username ?: stringResource(R.string.simkl_user_fallback)
             ),
             value = stringResource(R.string.tracking_status_connected),

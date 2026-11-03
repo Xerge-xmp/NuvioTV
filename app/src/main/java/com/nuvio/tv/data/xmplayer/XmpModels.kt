@@ -20,11 +20,12 @@ data class XmpConfiguration(
 /**
  * The permissions Nuvio asks for. Writes need XMPlayer Premium or Pro; on Free the connection reads only. dvr:read plays
  * the profile's Cloud DVR recordings; catalog:read / catalog:write air and edit its IPTV catalog (Premium+, answered by
- * the account's XMPlayer DVR agent). A connection made before these existed keeps its old permissions until it connects again.
+ * the account's XMPlayer DVR agent); trakt:bridge / simkl:bridge use the profile's XMPlayer Trakt / Simkl link (Premium+,
+ * scrobbling Pro — see XmpBridge). A connection made before these existed keeps its old permissions until it connects again.
  */
 internal const val XMP_SCOPES =
     "profile:read favorites:read favorites:write history:read history:write collections:read collections:write ratings:read ratings:write " +
-        "dvr:read catalog:read catalog:write"
+        "dvr:read catalog:read catalog:write trakt:bridge simkl:bridge"
 
 enum class XmpAuthError {
     MISSING_CLIENT_ID,

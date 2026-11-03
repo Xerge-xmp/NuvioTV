@@ -23,7 +23,9 @@ data class SimklPinSession(
     val userCode: String,
     val verificationUri: String,
     val expiresAtEpochMs: Long,
-    val intervalSeconds: Int
+    val intervalSeconds: Int,
+    /** Set when this is a link through XMPlayer (its code and address are XMPlayer's): the link to poll. */
+    val xmpLinkId: String? = null
 )
 
 data class SimklAuthState(
@@ -33,7 +35,9 @@ data class SimklAuthState(
     val hasFetchedUserSettings: Boolean = false,
     val settingsActivityWatermark: String? = null,
     val pinSession: SimklPinSession? = null,
-    val error: SimklAuthError? = null
+    val error: SimklAuthError? = null,
+    /** Connected through the XMPlayer profile's own Simkl link (no Simkl token on this device). */
+    val viaXmp: Boolean = false
 ) {
     val mode: SimklConnectionMode
         get() = when {
