@@ -38,6 +38,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.data.mediaserver.ServerCapability
 import com.nuvio.tv.data.mediaserver.messageRes
 import com.nuvio.tv.data.mediaserver.supports
+import com.nuvio.tv.data.mediaserver.xmplayer.XmpServerProvider
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.theme.NuvioTheme
 
@@ -59,6 +60,15 @@ internal fun MediaServerSettingsContent(
     val context = LocalContext.current
     val provider = viewModel.provider(connection)
     val providerName = provider?.displayName ?: connection.providerId
+    if (provider?.id == XmpServerProvider.PROVIDER_ID) {
+        XmpServerSettingsContent(
+            connection = connection,
+            statusLine = connection.statusText(providerName, uiState.failures[connection.id]),
+            initialFocusRequester = initialFocusRequester,
+            serversViewModel = viewModel
+        )
+        return
+    }
     var signIn by remember { mutableStateOf<ServerSignInRequest?>(null) }
     var confirmRemove by remember { mutableStateOf(false) }
 

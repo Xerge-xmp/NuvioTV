@@ -109,6 +109,7 @@ class PlayerViewModel @Inject constructor(
         // Release trailer player codec resources so the full-screen player can
         // claim hardware decoders without contention (prevents black screen).
         trailerPlayerPool.yield()
+        com.nuvio.tv.core.probe.AppProbe.attachPlayer(this)
     }
 
     internal val controller = PlayerRuntimeController(
@@ -309,6 +310,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        com.nuvio.tv.core.probe.AppProbe.detachPlayer(this)
         postPlayRecommendationController.stop()
         controller.onCleared()
         // Allow the trailer player to be re-created when returning to home screen.

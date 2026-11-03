@@ -35,7 +35,9 @@ data class ServerLibrary(
     val id: String,
     val name: String,
     val kind: ServerMediaKind,
-    val selected: Boolean = true
+    val selected: Boolean = true,
+    /** Whether its row shows on Home (every library still has its catalog). XMPlayer: its favourite categories. */
+    val home: Boolean = true
 ) {
     fun holds(kind: ServerMediaKind): Boolean =
         this.kind == kind || (this.kind == ServerMediaKind.MIXED && kind != ServerMediaKind.COLLECTION)

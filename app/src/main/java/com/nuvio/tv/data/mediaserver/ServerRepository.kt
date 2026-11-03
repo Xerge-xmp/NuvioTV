@@ -206,7 +206,7 @@ class ServerRepository(
         return ServerSyncSnapshot(
             profileId = profileId,
             version = localVersion,
-            servers = mutableState.value.connections.mapNotNull { connection ->
+            servers = mutableState.value.connections.filter { it.syncsToNuvioCloud() }.mapNotNull { connection ->
                 currentTokens[connection.credentialRef]?.let(connection::toSynced)
             },
             pendingPush = pendingPush,
@@ -216,7 +216,9 @@ class ServerRepository(
 
     fun applySync(snapshot: ServerSyncSnapshot, servers: List<SyncedServer>, keys: Set<String>): Boolean {
         if (loadedProfileId != snapshot.profileId || localVersion != snapshot.version) return false
-        val current = mutableState.value.connections
+        // A connection that never syncs (XMPlayer) is not in the remote list: keep it as it is, never drop it.
+        val deviceOnly = mutableState.value.connections.filterNot { it.syncsToNuvioCloud() }
+        val current = mutableState.value.connections.filter { it.syncsToNuvioCloud() }
         val currentByKey = current.associateBy { serverKey(it.providerId, it.remoteServerId, it.remoteUserId) }
         val currentTokens = synchronized(lock) { tokens }
         val usedIds = mutableSetOf<String>()
@@ -233,10 +235,12 @@ class ServerRepository(
         (current.map { it.id } - usedIds).forEach { setFailure(it, null) }
         pendingPush = false
         syncedKeys = keys
+        deviceOnly.forEach { connection -> currentTokens[connection.credentialRef]?.let { updatedTokens[connection.credentialRef] = it } }
+        val all = connections + deviceOnly
         if (connections == current && updatedTokens == currentTokens) {
-            persist(current, currentTokens)
+            persist(mutableState.value.connections, currentTokens)
         } else {
-            save(connections, updatedTokens, local = false)
+            save(all, updatedTokens, local = false)
         }
         return true
     }
@@ -323,10 +327,17 @@ class ServerRepository(
         return current.map { library -> library.copy(selected = selection[library.id] ?: true) }
     }
 
+    /**
+     * Whether a connection goes into Nuvio's own account sync. XMPlayer never does: its entry names the XMPlayer profile
+     * and the user's playlist categories, which stay on the device (each device connects to XMPlayer itself).
+     */
+    private fun ServerConnection.syncsToNuvioCloud(): Boolean = providerId != XMPLAYER_PROVIDER_ID
+
     private fun newId(prefix: String): String =
         prefix + (0 until 15).joinToString("") { Random.nextInt(16).toString(16) }
 
     private companion object {
         const val TAG = "ServerRepository"
+        const val XMPLAYER_PROVIDER_ID = "xmplayer"
     }
 }

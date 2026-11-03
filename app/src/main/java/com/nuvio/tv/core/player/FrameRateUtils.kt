@@ -1317,7 +1317,9 @@ object FrameRateUtils {
             }
         } catch (e: Exception) {
             call.cancel()
-            Log.w(TAG, "fetchHttpRangeToFile failed for url=$url range=$rangeHeader: ${e.message}")
+            // The host only: a stream address can carry a token in its query (debrid links, XMPlayer DVR playback links).
+            val host = runCatching { java.net.URI(url).host }.getOrNull() ?: "?"
+            Log.w(TAG, "fetchHttpRangeToFile failed host=$host range=$rangeHeader: ${e.message}")
             HttpRangeFetchResult(success = false)
         }
     }

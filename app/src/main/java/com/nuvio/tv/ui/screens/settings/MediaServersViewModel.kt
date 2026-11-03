@@ -9,6 +9,7 @@ import com.nuvio.tv.data.mediaserver.ServerProvider
 import com.nuvio.tv.data.mediaserver.ServerRepository
 import com.nuvio.tv.data.mediaserver.ServersUiState
 import com.nuvio.tv.data.mediaserver.serverFailure
+import com.nuvio.tv.data.mediaserver.xmplayer.XmpServerProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -52,13 +53,19 @@ class MediaServersViewModel @Inject constructor(
         address: String,
         username: String,
         password: String,
+        onFailure: (ServerFailure) -> Unit = {},
         onConnected: (ServerConnection) -> Unit
     ) {
         if (mutableSignIn.value.connecting) return
         mutableSignIn.value = ServerSignInState(connecting = true)
         viewModelScope.launch {
             try {
-                val connection = repository.connect(provider, address, username.trim(), password)
+                var connection = repository.connect(provider, address, username.trim(), password)
+                if (provider.id == XmpServerProvider.PROVIDER_ID && !connection.useCatalogMetadata) {
+                    // XMPlayer airs its catalog by TMDB / IMDb ids: Nuvio's own title pages and streams.
+                    repository.setCatalogMetadata(connection.id, true)
+                    connection = connection.copy(useCatalogMetadata = true)
+                }
                 mutableSignIn.value = ServerSignInState()
                 onConnected(connection)
             } catch (error: CancellationException) {
@@ -66,8 +73,10 @@ class MediaServersViewModel @Inject constructor(
                 throw error
             } catch (error: ServerException) {
                 mutableSignIn.value = ServerSignInState(error = error.failure)
+                onFailure(error.failure)
             } catch (_: Exception) {
                 mutableSignIn.value = ServerSignInState(error = ServerFailure.FAILED)
+                onFailure(ServerFailure.FAILED)
             }
         }
     }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The test probe: only in the `probe` build type. The receiver takes commands from adb alone (DUMP is held by the
+     shell, not by apps), and answers on logcat tag NuvioProbe. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider
+            android:name="com.nuvio.tv.probe.ProbeInit"
+            android:authorities="${applicationId}.probe"
+            android:exported="false"
+            android:initOrder="1000" />
+        <receiver
+            android:name="com.nuvio.tv.probe.ProbeReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+    </application>
+</manifest>

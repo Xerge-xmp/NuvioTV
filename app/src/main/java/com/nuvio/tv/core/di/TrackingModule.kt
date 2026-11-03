@@ -34,6 +34,22 @@ import javax.inject.Singleton
 abstract class TrackingModule {
     @Binds
     @IntoSet
+    abstract fun bindXmpLibrary(provider: com.nuvio.tv.data.xmplayer.XmpTrackingLibraryProvider): TrackingLibraryProvider
+
+    @Binds
+    @IntoSet
+    abstract fun bindXmpProvider(provider: com.nuvio.tv.data.xmplayer.XmpTrackingProvider): TrackingProvider
+
+    @Binds
+    @IntoSet
+    abstract fun bindXmpProgress(provider: com.nuvio.tv.data.xmplayer.XmpTrackingProgressProvider): TrackingProgressProvider
+
+    @Binds
+    @IntoSet
+    abstract fun bindXmpHistory(writer: com.nuvio.tv.data.xmplayer.XmpTrackingHistoryWriter): TrackingHistoryWriter
+
+    @Binds
+    @IntoSet
     abstract fun bindMdbListLibrary(provider: com.nuvio.tv.data.mdblist.MdbListTrackingLibraryProvider): TrackingLibraryProvider
 
     @Binds

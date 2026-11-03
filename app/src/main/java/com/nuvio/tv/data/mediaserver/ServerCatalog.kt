@@ -180,7 +180,7 @@ class ServerCatalog @Inject constructor(
                 id = library.id,
                 name = "${connection.name} · ${library.name}",
                 extra = listOf(CatalogExtra(name = "skip")),
-                showInHome = true,
+                showInHome = library.home,
                 hasExplicitShowInHome = true
             )
         }

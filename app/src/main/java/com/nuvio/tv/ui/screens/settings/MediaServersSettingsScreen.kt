@@ -2,6 +2,7 @@
 
 package com.nuvio.tv.ui.screens.settings
 
+import android.widget.Toast
 import androidx.annotation.RawRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -33,6 +35,8 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.data.mediaserver.ServerConnection
 import com.nuvio.tv.data.mediaserver.ServerFailure
+import com.nuvio.tv.data.mediaserver.messageRes
+import com.nuvio.tv.data.mediaserver.xmplayer.XmpServerProvider
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 @Composable
@@ -42,6 +46,7 @@ internal fun MediaServersSettingsContent(
     viewModel: MediaServersViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var signIn by remember { mutableStateOf<ServerSignInRequest?>(null) }
     val connections = uiState.connections
     val focusModifier = initialFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
@@ -89,10 +94,26 @@ internal fun MediaServersSettingsContent(
                     }
                     item(key = "servers_add_label") { ServerSectionLabel(stringResource(R.string.servers_section_add)) }
                     items(viewModel.providers, key = { "provider_${it.id}" }) { provider ->
+                        val isXmplayer = provider.id == XmpServerProvider.PROVIDER_ID
                         SettingsActionRow(
                             title = provider.displayName,
-                            subtitle = stringResource(R.string.servers_add_description, provider.displayName),
-                            onClick = { signIn = ServerSignInRequest(provider) },
+                            subtitle = if (isXmplayer) stringResource(R.string.xmp_server_add_description)
+                            else stringResource(R.string.servers_add_description, provider.displayName),
+                            onClick = {
+                                if (isXmplayer) {
+                                    // XMPlayer needs no address or password: it uses Nuvio's XMPlayer connection.
+                                    viewModel.connect(
+                                        provider, "", "", "",
+                                        onFailure = { failure ->
+                                            val message = if (failure == ServerFailure.AUTH_REQUIRED) context.getString(R.string.xmp_server_connect_first)
+                                            else context.getString(failure.messageRes())
+                                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                        }
+                                    ) { onOpenServer(it.id) }
+                                } else {
+                                    signIn = ServerSignInRequest(provider)
+                                }
+                            },
                             leadingRawIconRes = serverLogoRes(provider.id),
                             modifier = if (connections.isEmpty() && provider == viewModel.providers.first()) focusModifier else Modifier
                         )
@@ -144,5 +165,6 @@ internal fun ServerConnection.statusLabel(failure: ServerFailure?): String? = wh
 internal fun serverLogoRes(providerId: String): Int? = when (providerId) {
     "jellyfin" -> R.raw.jellyfin_logo
     "emby" -> R.raw.emby_logo
+    XmpServerProvider.PROVIDER_ID -> R.raw.xmplayer_logo
     else -> null
 }

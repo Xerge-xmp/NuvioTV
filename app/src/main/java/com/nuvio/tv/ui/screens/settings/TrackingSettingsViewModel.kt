@@ -48,6 +48,7 @@ class TrackingSettingsViewModel @Inject constructor(
     traktAuthDataStore: TraktAuthDataStore,
     simklAuthRepository: SimklAuthRepository,
     mdbListAuth: MdbListAuthStore,
+    xmpAuth: com.nuvio.tv.data.xmplayer.XmpAuthStore,
     profiles: ProfileManager
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(TrackingSettingsUiState())
@@ -55,11 +56,12 @@ class TrackingSettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val connected = combine(traktAuthDataStore.state, simklAuthRepository.state, mdbListAuth.state, profiles.activeProfileId) { trakt, simkl, mdblist, profileId ->
-                if (mdblist.scope.profileId != profileId) null else buildSet<TrackingProviderId> {
+            val connected = combine(traktAuthDataStore.state, simklAuthRepository.state, mdbListAuth.state, xmpAuth.state, profiles.activeProfileId) { trakt, simkl, mdblist, xmp, profileId ->
+                if (mdblist.scope.profileId != profileId || xmp.scope.profileId != profileId) null else buildSet<TrackingProviderId> {
                     if (trakt.isAuthenticated) add(TrackingProviderId.TRAKT)
                     if (simkl.isAuthenticated) add(TrackingProviderId.SIMKL)
                     if (mdblist.isAuthenticated) add(TrackingProviderId.MDBLIST)
+                    if (xmp.isAuthenticated) add(TrackingProviderId.XMPLAYER)
                 }
             }
             combine(

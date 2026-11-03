@@ -150,6 +150,8 @@ android {
         buildConfigField("String", "SIMKL_CLIENT_ID", buildConfigString(resolveProperty(devProperties, localProperties, "SIMKL_CLIENT_ID")))
         buildConfigField("String", "SIMKL_APP_NAME", buildConfigString(resolveProperty(devProperties, localProperties, "SIMKL_APP_NAME", "nuvio")))
         buildConfigField("String", "MDBLIST_CLIENT_ID", buildConfigString(resolveProperty(devProperties, localProperties, "MDBLIST_CLIENT_ID")))
+        // XMPlayer Sync API (https://xmplayer.app/developers.html): a public client id (xmpc_…) from XMPlayer ▸ Account ▸ Developer apps.
+        buildConfigField("String", "XMPLAYER_CLIENT_ID", buildConfigString(resolveProperty(devProperties, localProperties, "XMPLAYER_CLIENT_ID")))
         buildConfigField("String", "TMDB_API_KEY", "\"${localProperties.getProperty("TMDB_API_KEY", "")}\"")
         buildConfigField("String", "TV_LOGIN_WEB_BASE_URL", "\"${localProperties.getProperty("TV_LOGIN_WEB_BASE_URL", "https://nuvio.tv/tv-login")}\"")
         buildConfigField("String", "DEVICE_LOGIN_WEB_BASE_URL", "\"${localProperties.getProperty("DEVICE_LOGIN_WEB_BASE_URL", "https://nuvio.tv/link")}\"")
@@ -299,6 +301,13 @@ android {
             applicationIdSuffix = ".debug"
             matchingFallbacks += "release"
         }
+        // The release build plus the test probe (src/probe: adb-only commands, answers on logcat tag NuvioProbe) that
+        // tools/nuvio-drive.js drives. For test devices only; the build anyone else installs is `release`.
+        create("probe") {
+            initWith(buildTypes.getByName("release"))
+            buildConfigField("String", "SENTRY_ENVIRONMENT", buildConfigString("probe"))
+            matchingFallbacks += "release"
+        }
     }
 
     splits {
@@ -431,7 +440,7 @@ sentry {
     sentryAuthToken?.let(authToken::set)
     sentryOrg?.let(org::set)
     sentryProject?.let(projectName::set)
-    ignoredBuildTypes.set(setOf("debug"))
+    ignoredBuildTypes.set(setOf("debug", "probe"))
     autoInstallation {
         enabled.set(false)
     }
