@@ -8,7 +8,10 @@
 ## What this build adds
 
 - **Sign in with XMPlayer** by QR code: your XMPlayer history, watch progress, favourites and collections sync both ways.
-- **Cloud DVR recordings** from XMPlayer, playable in the app.
+- **Your IPTV movie and series categories as Nuvio catalogs** (Premium and Pro, through your XMPlayer DVR Agent):
+  favourite a category and it's a row on Home; hide, show, rename and reorder categories from Nuvio's settings.
+  Titles open Nuvio's own pages and streams.
+- **Your XMPlayer DVR recordings**, from the cloud or your DVR Agent, playable in the app.
 - **Trakt and Simkl through XMPlayer** (Premium and Pro), with no separate sign-in when they're already linked in XMPlayer.
 - **Movie and show details** through XMPlayer's backend, with no API keys needed.
 - Installs **beside** the official Nuvio app (its own package, `com.nuvio.tv.xmplayer`) and updates itself from this repository's releases.
