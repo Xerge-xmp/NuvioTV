@@ -7,6 +7,7 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 import androidx.annotation.RawRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -93,6 +94,8 @@ import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.SettingsUiStyle
 import com.nuvio.tv.ui.components.FocusMarqueeText
 import com.nuvio.tv.ui.components.BrandWordmark
+import com.nuvio.tv.ui.components.LoadingIndicator
+import com.nuvio.tv.ui.theme.accentBrush
 import com.nuvio.tv.ui.util.contentTextDirection
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.detail.requestFocusAfterFrames
@@ -839,8 +842,12 @@ internal fun SettingsActionRow(
     leadingIcon: ImageVector? = null,
     @RawRes leadingRawIconRes: Int? = null,
     leadingArtworkSize: Dp = NuvioTheme.spacing.xl,
-    valueColor: Color = NuvioTheme.colors.TextSecondary
+    valueColor: Color = NuvioTheme.colors.TextSecondary,
+    busy: Boolean = false,
+    progress: Float? = null
 ) {
+    // busy: the row's action is running — a spinner replaces the trailing arrow, and [progress] (0..1, when known)
+    // fills a bar under the subtitle. The row keeps its focus, so the remote stays where the user pressed OK.
     val contentAlpha = if (enabled) 1f else 0.4f
     var isFocused by remember { mutableStateOf(false) }
 
@@ -917,6 +924,10 @@ internal fun SettingsActionRow(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                if (busy && progress != null) {
+                    Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
+                    SettingsRowProgressBar(progress = progress)
+                }
             }
 
             if (!value.isNullOrBlank()) {
@@ -932,13 +943,38 @@ internal fun SettingsActionRow(
             }
 
             Spacer(modifier = Modifier.width(10.dp))
-            Icon(
-                imageVector = trailingIcon,
-                contentDescription = null,
-                tint = NuvioTheme.colors.TextTertiary.copy(alpha = contentAlpha),
-                modifier = Modifier.size(18.dp)
-            )
+            if (busy) {
+                LoadingIndicator(modifier = Modifier.size(18.dp))
+            } else {
+                Icon(
+                    imageVector = trailingIcon,
+                    contentDescription = null,
+                    tint = NuvioTheme.colors.TextTertiary.copy(alpha = contentAlpha),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
+    }
+}
+
+/** A thin bar under a settings row's subtitle: how much of the row's running action is done (0..1), animated. */
+@Composable
+private fun SettingsRowProgressBar(progress: Float) {
+    val shown by animateFloatAsState(targetValue = progress.coerceIn(0f, 1f), label = "settings_row_progress")
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(4.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(NuvioTheme.colors.Border)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(shown)
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(NuvioTheme.palette.accentBrush())
+        )
     }
 }
 

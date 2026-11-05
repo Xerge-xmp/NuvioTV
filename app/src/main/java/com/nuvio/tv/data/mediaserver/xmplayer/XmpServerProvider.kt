@@ -36,6 +36,9 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -72,12 +75,25 @@ class XmpServerProvider(
     }
 
     override suspend fun libraries(session: ServerSession): List<ServerLibrary> = guarded {
+        mutableReading.value = XmpReadProgress(done = 0, total = 0)
+        try {
+            readLibraries()
+        } finally {
+            mutableReading.value = null
+        }
+    }
+
+    /** Every playlist's movies and series, then the recordings — one step each, published as it goes (see [reading]). */
+    private suspend fun readLibraries(): List<ServerLibrary> {
         clearAired()
         val sources = catalog.sources()
         val many = sources.size > 1
+        val total = sources.size * XmpCatalogKind.entries.size + 1
+        var done = 0
         val out = mutableListOf<ServerLibrary>()
         for (source in sources) {
             for (kind in XmpCatalogKind.entries) {
+                mutableReading.value = XmpReadProgress(done, total, source.name, kind)
                 val categories = runCatching { catalog.categories(source.id, kind) }.getOrElse { error ->
                     if (error is CancellationException) throw error
                     if ((error as? XmpApiException)?.code == "source_has_no_vod") emptyList() else throw error
@@ -90,14 +106,17 @@ class XmpServerProvider(
                         home = category.favorite
                     )
                 }
+                done++
             }
         }
+        mutableReading.value = XmpReadProgress(done, total, recordings = true)
         val recordings = runCatching { catalog.recordings() }.getOrNull()
         if (recordings != null) {
             // One video each, opened as itself: a single type keeps the row titled "Recordings" (a mixed library reads "- Mixed").
             out += ServerLibrary(id = LibraryId.Recordings.encode(), name = RECORDINGS_NAME, kind = ServerMediaKind.MOVIE, home = true)
         }
-        out
+        mutableReading.value = XmpReadProgress(total, total)
+        return out
     }
 
     override suspend fun libraryPage(session: ServerSession, library: ServerLibrary, start: Int, limit: Int): ServerPage<ServerTitle> = guarded {
@@ -173,6 +192,14 @@ class XmpServerProvider(
         var nextPage = 1
         var exhausted = false
     }
+
+    private val mutableReading = MutableStateFlow<XmpReadProgress?>(null)
+
+    /**
+     * What a running read of the libraries is doing, step by step (each playlist's movies, its series, then the
+     * recordings); null when none runs. Adding XMPlayer in Settings shows it, since that read takes seconds.
+     */
+    val reading: StateFlow<XmpReadProgress?> = mutableReading.asStateFlow()
 
     private val aired = ConcurrentHashMap<String, Aired>()
     private val titlesById = ConcurrentHashMap<String, XmpCatalogTitle>()
@@ -341,6 +368,21 @@ fun Throwable.toServerFailure(): ServerFailure = when (this) {
         else -> ServerFailure.FAILED
     }
     else -> ServerFailure.FAILED
+}
+
+/**
+ * One step of reading XMPlayer's libraries: [done] of [total] steps finished, and the one under way — a playlist's
+ * movies or series ([sourceName], [kind]) or the [recordings]. [total] is 0 while the playlists themselves are read.
+ */
+data class XmpReadProgress(
+    val done: Int,
+    val total: Int,
+    val sourceName: String? = null,
+    val kind: XmpCatalogKind? = null,
+    val recordings: Boolean = false
+) {
+    /** The share finished, 0..1; null while the number of steps is not known yet. */
+    val fraction: Float? get() = if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else null
 }
 
 /** A library: one category of one playlist's movies or series, or the recordings. */

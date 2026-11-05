@@ -36,8 +36,11 @@ import com.nuvio.tv.R
 import com.nuvio.tv.data.mediaserver.ServerConnection
 import com.nuvio.tv.data.mediaserver.ServerFailure
 import com.nuvio.tv.data.mediaserver.messageRes
+import com.nuvio.tv.data.mediaserver.xmplayer.XmpReadProgress
 import com.nuvio.tv.data.mediaserver.xmplayer.XmpServerProvider
+import com.nuvio.tv.data.xmplayer.XmpCatalogKind
 import com.nuvio.tv.ui.theme.NuvioTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 
 @Composable
 internal fun MediaServersSettingsContent(
@@ -46,6 +49,12 @@ internal fun MediaServersSettingsContent(
     viewModel: MediaServersViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val signInState by viewModel.signIn.collectAsStateWithLifecycle()
+    val xmpProvider = remember(viewModel.providers) { viewModel.providers.firstOrNull { it is XmpServerProvider } as? XmpServerProvider }
+    val xmpReading by (xmpProvider?.reading ?: remember { MutableStateFlow<XmpReadProgress?>(null) }).collectAsStateWithLifecycle()
+    // Adding XMPlayer reads every playlist before the server page opens (seconds): its row shows each step while it runs.
+    var addingXmp by remember { mutableStateOf(false) }
+    val xmpBusy = addingXmp && signInState.connecting
     val context = LocalContext.current
     var signIn by remember { mutableStateOf<ServerSignInRequest?>(null) }
     val connections = uiState.connections
@@ -95,21 +104,35 @@ internal fun MediaServersSettingsContent(
                     item(key = "servers_add_label") { ServerSectionLabel(stringResource(R.string.servers_section_add)) }
                     items(viewModel.providers, key = { "provider_${it.id}" }) { provider ->
                         val isXmplayer = provider.id == XmpServerProvider.PROVIDER_ID
+                        val busy = isXmplayer && xmpBusy
                         SettingsActionRow(
                             title = provider.displayName,
-                            subtitle = if (isXmplayer) stringResource(R.string.xmp_server_add_description)
-                            else stringResource(R.string.servers_add_description, provider.displayName),
+                            subtitle = when {
+                                busy -> xmpAddingText(xmpReading)
+                                isXmplayer -> stringResource(R.string.xmp_server_add_description)
+                                else -> stringResource(R.string.servers_add_description, provider.displayName)
+                            },
+                            busy = busy,
+                            progress = if (busy) xmpReading?.fraction ?: 0f else null,
                             onClick = {
                                 if (isXmplayer) {
-                                    // XMPlayer needs no address or password: it uses Nuvio's XMPlayer connection.
-                                    viewModel.connect(
-                                        provider, "", "", "",
-                                        onFailure = { failure ->
-                                            val message = if (failure == ServerFailure.AUTH_REQUIRED) context.getString(R.string.xmp_server_connect_first)
-                                            else context.getString(failure.messageRes())
-                                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                    // Pressed again while it reads: nothing (connect() ignores a second call too).
+                                    if (!signInState.connecting) {
+                                        addingXmp = true
+                                        // XMPlayer needs no address or password: it uses Nuvio's XMPlayer connection.
+                                        viewModel.connect(
+                                            provider, "", "", "",
+                                            onFailure = { failure ->
+                                                addingXmp = false
+                                                val message = if (failure == ServerFailure.AUTH_REQUIRED) context.getString(R.string.xmp_server_connect_first)
+                                                else context.getString(failure.messageRes())
+                                                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                            }
+                                        ) {
+                                            addingXmp = false
+                                            onOpenServer(it.id)
                                         }
-                                    ) { onOpenServer(it.id) }
+                                    }
                                 } else {
                                     signIn = ServerSignInRequest(provider)
                                 }
@@ -135,6 +158,21 @@ internal fun MediaServersSettingsContent(
             onDismiss = { signIn = null }
         )
     }
+}
+
+/** What adding XMPlayer is doing right now: finding the playlists, reading one of them (step N of M), or finishing. */
+@Composable
+private fun xmpAddingText(reading: XmpReadProgress?): String = when {
+    reading == null || reading.total == 0 -> stringResource(R.string.xmp_server_adding_start)
+    reading.done >= reading.total -> stringResource(R.string.xmp_server_adding_finish)
+    reading.recordings -> stringResource(R.string.xmp_server_adding_recordings, reading.done + 1, reading.total)
+    else -> stringResource(
+        R.string.xmp_server_adding_step,
+        reading.sourceName.orEmpty(),
+        stringResource(if (reading.kind == XmpCatalogKind.SERIES) R.string.type_series_plural else R.string.type_movies),
+        reading.done + 1,
+        reading.total
+    )
 }
 
 @Composable
