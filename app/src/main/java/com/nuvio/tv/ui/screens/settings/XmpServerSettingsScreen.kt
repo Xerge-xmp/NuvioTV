@@ -302,7 +302,8 @@ internal fun XmpServerSettingsContent(
         NuvioDialog(
             onDismiss = { confirmRemove = false },
             title = stringResource(R.string.servers_remove_confirm_title),
-            subtitle = stringResource(R.string.servers_remove_confirm_message, connection.name)
+            // Not the generic "signs you out" text: removing this server keeps Nuvio's XMPlayer connection (sync, tracking).
+            subtitle = stringResource(R.string.xmp_server_remove_confirm_message)
         ) {
             SettingsDialogActionRow {
                 SettingsDialogActionButton(text = stringResource(R.string.action_cancel), onClick = { confirmRemove = false })

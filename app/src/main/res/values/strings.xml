@@ -3466,6 +3466,7 @@
     <string name="xmp_server_adding_step">Reading %1$s · %2$s · %3$d of %4$d</string>
     <string name="xmp_server_adding_recordings">Reading your recordings · %1$d of %2$d</string>
     <string name="xmp_server_adding_finish">Finishing…</string>
+    <string name="xmp_server_remove_confirm_message">Your XMPlayer categories and recordings leave this Nuvio profile. You stay signed in to XMPlayer, and nothing changes in XMPlayer itself. You can add it back anytime.</string>
     <string name="xmp_server_connect_first">Connect XMPlayer first: Settings › Tracking › XMPlayer</string>
     <string name="xmp_server_enabled_description">Show the categories you keep in XMPlayer (favourites as rows on Home) and your recordings</string>
     <string name="xmp_server_playlists">Playlists</string>
