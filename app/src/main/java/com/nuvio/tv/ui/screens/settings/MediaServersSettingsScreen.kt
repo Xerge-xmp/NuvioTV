@@ -124,8 +124,14 @@ internal fun MediaServersSettingsContent(
                                             provider, "", "", "",
                                             onFailure = { failure ->
                                                 addingXmp = false
-                                                val message = if (failure == ServerFailure.AUTH_REQUIRED) context.getString(R.string.xmp_server_connect_first)
-                                                else context.getString(failure.messageRes())
+                                                // XMPlayer's own words: its playlists come through the account's DVR agent.
+                                                val message = when (failure) {
+                                                    ServerFailure.AUTH_REQUIRED -> context.getString(R.string.xmp_server_connect_first)
+                                                    ServerFailure.UNREACHABLE -> context.getString(R.string.xmp_server_problem_offline) +
+                                                        ". " + context.getString(R.string.xmp_server_problem_offline_message)
+                                                    ServerFailure.UNSUPPORTED -> context.getString(R.string.xmp_server_problem_no_agent_message)
+                                                    else -> context.getString(failure.messageRes())
+                                                }
                                                 Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                                             }
                                         ) {

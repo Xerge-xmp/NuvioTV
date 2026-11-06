@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.data.mediaserver.ServerRepository
+import com.nuvio.tv.data.mediaserver.xmplayer.LibraryId
 import com.nuvio.tv.data.mediaserver.xmplayer.XmpServerProvider
 import com.nuvio.tv.data.xmplayer.XmpApiException
 import com.nuvio.tv.data.xmplayer.XmpAuthException
@@ -98,6 +99,14 @@ class XmpCatalogEditorViewModel @Inject constructor(
                 val sources = catalog.sources().map { XmpCatalogSourceUi(it.id, it.name) }
                 mutable.update { it.copy(loading = false, sources = sources) }
                 mutable.value.open?.let { loadCategories(it) }
+                // XMPlayer was added while its DVR agent was away (only the recordings were aired): the agent answers
+                // now, so Nuvio reads what it airs — the categories reach Home without another step.
+                val id = connectionId
+                if (sources.isNotEmpty() && id != null &&
+                    servers.connection(id)?.libraries?.none { LibraryId.parse(it.id) is LibraryId.Category } == true
+                ) {
+                    runCatching { servers.refreshLibraries(id) }
+                }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {

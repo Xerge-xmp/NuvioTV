@@ -77,16 +77,26 @@ class XmpServerProvider(
     override suspend fun libraries(session: ServerSession): List<ServerLibrary> = guarded {
         mutableReading.value = XmpReadProgress(done = 0, total = 0)
         try {
-            readLibraries()
+            readLibraries(session)
         } finally {
             mutableReading.value = null
         }
     }
 
     /** Every playlist's movies and series, then the recordings — one step each, published as it goes (see [reading]). */
-    private suspend fun readLibraries(): List<ServerLibrary> {
+    private suspend fun readLibraries(session: ServerSession): List<ServerLibrary> {
         clearAired()
-        val sources = catalog.sources()
+        val sources = try {
+            catalog.sources()
+        } catch (error: XmpApiException) {
+            // The playlists reach Nuvio only through the account's XMPlayer DVR agent; the recordings do not. While no
+            // agent answers, a FIRST add still adds XMPlayer (with its recordings) and its page says what is missing and
+            // how to retry. A re-read of a server that already airs categories fails instead: the rows on Home are kept,
+            // never emptied because the agent is away for a while.
+            val airsCategories = session.connection.libraries.any { LibraryId.parse(it.id) is LibraryId.Category }
+            if (airsCategories || !error.isAgentAway()) throw error
+            emptyList()
+        }
         val many = sources.size > 1
         val total = sources.size * XmpCatalogKind.entries.size + 1
         var done = 0
@@ -354,6 +364,10 @@ class XmpServerProvider(
         private const val TMDB_BACKDROP = "https://image.tmdb.org/t/p/w1280"
     }
 }
+
+/** No XMPlayer DVR agent of the account can answer right now: none at all, none online, or one still starting. */
+internal fun XmpApiException.isAgentAway(): Boolean =
+    code == "no_agent" || code == "no_answering_device" || code == "agent_offline" || code == "agent_not_ready" || status == 503
 
 /** How an XMPlayer answer reads as a media-server failure (the editor shows its own, more exact messages). */
 fun Throwable.toServerFailure(): ServerFailure = when (this) {
