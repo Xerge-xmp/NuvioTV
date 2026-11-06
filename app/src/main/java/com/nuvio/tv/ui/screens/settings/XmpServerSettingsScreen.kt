@@ -82,6 +82,15 @@ internal fun XmpServerSettingsContent(
     var returnToCategory by remember { mutableStateOf<String?>(null) }
     var returnToTitle by remember { mutableStateOf<String?>(null) }
     val dialogOpen = selectedCategory != null || renamingCategory != null || state.titles != null
+    // Retry worked, so its row went away under the remote's focus: focus goes to the top of the page, not the side menu.
+    var retried by remember { mutableStateOf(false) }
+    LaunchedEffect(state.problem) {
+        if (state.problem == null && retried) {
+            retried = false
+            delay(80)
+            runCatching { initialFocusRequester?.requestFocus() }
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         SettingsDetailHeader(title = connection.name, subtitle = statusLine)
@@ -108,9 +117,9 @@ internal fun XmpServerSettingsContent(
                             SettingsActionRow(
                                 title = stringResource(problem.titleRes()),
                                 subtitle = stringResource(problem.messageRes()),
-                                value = stringResource(R.string.xmp_server_retry),
+                                value = stringResource(if (state.loading) R.string.xmp_server_loading else R.string.xmp_server_retry),
                                 leadingIcon = Icons.Default.Sync,
-                                onClick = viewModel::reload
+                                onClick = { if (!state.loading) { retried = true; viewModel.reload() } }
                             )
                         }
                     }

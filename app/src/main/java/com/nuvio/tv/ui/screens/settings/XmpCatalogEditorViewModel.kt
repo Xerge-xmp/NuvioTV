@@ -93,11 +93,13 @@ class XmpCatalogEditorViewModel @Inject constructor(
     }
 
     fun reload() {
-        mutable.update { it.copy(loading = true, problem = null) }
+        // the problem stays on screen while it is checked again: its row keeps the remote's focus (a row that vanished
+        // under it sent focus to the side menu — measured on the TV 2026-11-06)
+        mutable.update { it.copy(loading = true) }
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val sources = catalog.sources().map { XmpCatalogSourceUi(it.id, it.name) }
-                mutable.update { it.copy(loading = false, sources = sources) }
+                val sources = sourcesOnceReady().map { XmpCatalogSourceUi(it.id, it.name) }
+                mutable.update { it.copy(loading = false, sources = sources, problem = null) }
                 mutable.value.open?.let { loadCategories(it) }
                 // XMPlayer was added while its DVR agent was away (only the recordings were aired): the agent answers
                 // now, so Nuvio reads what it airs — the categories reach Home without another step.
@@ -111,6 +113,22 @@ class XmpCatalogEditorViewModel @Inject constructor(
                 throw error
             } catch (error: Exception) {
                 mutable.update { it.copy(loading = false, problem = error.problem()) }
+            }
+        }
+    }
+
+    /**
+     * The playlists — waited for while the agent is still starting: a DVR agent that has just come online answers
+     * "agent_not_ready" for the few seconds it reads the account's playlists, and that is not "offline".
+     */
+    private suspend fun sourcesOnceReady(): List<com.nuvio.tv.data.xmplayer.XmpCatalogSource> {
+        var tries = 0
+        while (true) {
+            try {
+                return catalog.sources()
+            } catch (error: XmpApiException) {
+                if (error.code != "agent_not_ready" || ++tries > NOT_READY_TRIES) throw error
+                delay(NOT_READY_WAIT_MS)
             }
         }
     }
@@ -290,5 +308,7 @@ class XmpCatalogEditorViewModel @Inject constructor(
     private companion object {
         const val TITLES_PAGE = 100
         const val AIRED_REFRESH_DELAY_MS = 1_500L
+        const val NOT_READY_WAIT_MS = 3_000L
+        const val NOT_READY_TRIES = 10
     }
 }

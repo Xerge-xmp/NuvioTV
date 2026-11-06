@@ -201,6 +201,9 @@ internal fun ServerConnection.statusText(providerName: String, failure: ServerFa
 internal fun ServerConnection.statusLabel(failure: ServerFailure?): String? = when {
     !enabled -> stringResource(R.string.servers_status_disabled)
     failure == ServerFailure.AUTH_REQUIRED -> stringResource(R.string.servers_status_auth)
+    // XMPlayer itself answers; what is away is the account's DVR agent, which reads the playlists
+    failure == ServerFailure.UNREACHABLE && providerId == XmpServerProvider.PROVIDER_ID ->
+        stringResource(R.string.xmp_server_status_agent_offline)
     failure == ServerFailure.UNREACHABLE -> stringResource(R.string.servers_status_unreachable)
     else -> null
 }
