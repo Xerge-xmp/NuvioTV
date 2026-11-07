@@ -12,11 +12,15 @@ class XmpApiClient(
 ) {
     @PublishedApi internal val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun get(path: String, query: Map<String, String> = emptyMap(), scope: XmpAuthScope = store.scope()): XmpHttpResponse =
-        execute(XmpHttpMethod.GET, path, query, "", scope)
+    suspend fun get(
+        path: String,
+        query: Map<String, String> = emptyMap(),
+        scope: XmpAuthScope = store.scope(),
+        lane: XmpLane = XmpLane.API
+    ): XmpHttpResponse = execute(XmpHttpMethod.GET, path, query, "", scope, lane)
 
-    suspend fun post(path: String, body: String, scope: XmpAuthScope = store.scope()): XmpHttpResponse =
-        execute(XmpHttpMethod.POST, path, emptyMap(), body, scope)
+    suspend fun post(path: String, body: String, scope: XmpAuthScope = store.scope(), lane: XmpLane = XmpLane.API): XmpHttpResponse =
+        execute(XmpHttpMethod.POST, path, emptyMap(), body, scope, lane)
 
     /** GET /v1/me → the profile this connection works in, the plan, and what it allows. Stored with the connection. */
     suspend fun refreshAccount(scope: XmpAuthScope = store.scope()): XmpAccount = me(scope).account
@@ -40,7 +44,14 @@ class XmpApiClient(
     internal inline fun <reified T> decode(body: String): T =
         runCatching { json.decodeFromString<T>(body) }.getOrElse { throw XmpDecodingException() }
 
-    private suspend fun execute(method: XmpHttpMethod, path: String, query: Map<String, String>, body: String, scope: XmpAuthScope): XmpHttpResponse {
+    private suspend fun execute(
+        method: XmpHttpMethod,
+        path: String,
+        query: Map<String, String>,
+        body: String,
+        scope: XmpAuthScope,
+        lane: XmpLane
+    ): XmpHttpResponse {
         var authorization = auth.authorization(scope)
         repeat(2) { attempt ->
             val response = http.execute(
@@ -50,7 +61,8 @@ class XmpApiClient(
                     query = query,
                     body = body,
                     accessToken = authorization.tokens.accessToken,
-                    limitKey = limitKey(scope, method)
+                    limitKey = limitKey(scope, method),
+                    lane = lane
                 ),
                 checkScope = { store.checkScope(scope) }
             )

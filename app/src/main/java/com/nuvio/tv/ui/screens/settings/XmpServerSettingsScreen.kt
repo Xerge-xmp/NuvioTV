@@ -367,6 +367,7 @@ private fun XmpCatalogKind.labelRes(): Int = if (this == XmpCatalogKind.MOVIES) 
 
 private fun XmpCatalogProblem.titleRes(): Int = when (this) {
     XmpCatalogProblem.AGENT_OFFLINE -> R.string.xmp_server_problem_offline
+    XmpCatalogProblem.AGENT_NOT_ANSWERING -> R.string.xmp_server_problem_not_answering
     XmpCatalogProblem.NO_AGENT -> R.string.xmp_server_problem_no_agent
     XmpCatalogProblem.PREMIUM -> R.string.xmp_server_problem_premium
     XmpCatalogProblem.PERMISSION -> R.string.xmp_server_problem_permission
@@ -376,6 +377,7 @@ private fun XmpCatalogProblem.titleRes(): Int = when (this) {
 
 private fun XmpCatalogProblem.messageRes(): Int = when (this) {
     XmpCatalogProblem.AGENT_OFFLINE -> R.string.xmp_server_problem_offline_message
+    XmpCatalogProblem.AGENT_NOT_ANSWERING -> R.string.xmp_server_problem_not_answering_message
     XmpCatalogProblem.NO_AGENT -> R.string.xmp_server_problem_no_agent_message
     XmpCatalogProblem.PREMIUM -> R.string.xmp_server_problem_premium_message
     XmpCatalogProblem.PERMISSION -> R.string.xmp_server_problem_permission_message

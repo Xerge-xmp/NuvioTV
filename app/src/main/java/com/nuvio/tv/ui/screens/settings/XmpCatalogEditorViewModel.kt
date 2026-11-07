@@ -30,6 +30,8 @@ import kotlinx.coroutines.sync.withLock
 enum class XmpCatalogProblem {
     /** The account's XMPlayer DVR agent is not running. */
     AGENT_OFFLINE,
+    /** The agent is connected but did not answer within the Sync API's wait: busy or stuck. */
+    AGENT_NOT_ANSWERING,
     /** The account has no XMPlayer DVR agent. */
     NO_AGENT,
     /** Editing playlists is XMPlayer Premium and Pro. */
@@ -297,6 +299,7 @@ class XmpCatalogEditorViewModel @Inject constructor(
         is XmpAuthException -> XmpCatalogProblem.NOT_CONNECTED
         is XmpApiException -> when (code) {
             "no_answering_device", "agent_offline" -> XmpCatalogProblem.AGENT_OFFLINE
+            "agent_timeout" -> XmpCatalogProblem.AGENT_NOT_ANSWERING
             "no_agent" -> XmpCatalogProblem.NO_AGENT
             "premium_required" -> XmpCatalogProblem.PREMIUM
             "scope_required" -> XmpCatalogProblem.PERMISSION

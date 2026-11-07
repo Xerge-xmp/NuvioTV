@@ -133,23 +133,28 @@ sealed interface XmpCatalogEdit {
 private fun stringArray(values: List<String>) =
     kotlinx.serialization.json.JsonArray(values.map { kotlinx.serialization.json.JsonPrimitive(it) })
 
+/** The catalog is answered by the account's DVR agent: every call here travels the agent lane ([XmpLane.AGENT]). */
 class XmpCatalogClient(private val api: XmpApiClient) {
     internal suspend fun sources(): List<XmpCatalogSource> =
-        api.decode<XmpCatalogSourcesResponse>(api.get("/v1/catalog").body).sources
+        api.decode<XmpCatalogSourcesResponse>(api.get("/v1/catalog", lane = XmpLane.AGENT).body).sources
 
     suspend fun categories(sourceId: String, kind: XmpCatalogKind): List<XmpCatalogCategory> =
-        api.decode<XmpCatalogCategoriesResponse>(api.get(path(sourceId, kind)).body).categories
+        api.decode<XmpCatalogCategoriesResponse>(api.get(path(sourceId, kind), lane = XmpLane.AGENT).body).categories
 
     /** One page (1-based) of a category's titles, up to 200. */
     suspend fun titles(sourceId: String, kind: XmpCatalogKind, categoryId: String, page: Int, limit: Int): List<XmpCatalogTitle> =
         api.decode<XmpCatalogTitlesResponse>(
-            api.get(path(sourceId, kind), mapOf("category" to categoryId, "page" to page.toString(), "limit" to limit.toString())).body
+            api.get(
+                path(sourceId, kind),
+                mapOf("category" to categoryId, "page" to page.toString(), "limit" to limit.toString()),
+                lane = XmpLane.AGENT
+            ).body
         ).titles
 
     /** Applies one edit; answers what XMPlayer did ("hid 1 category"). */
     suspend fun edit(sourceId: String, kind: XmpCatalogKind, edit: XmpCatalogEdit): String {
         val body = buildJsonObject { put("intent", edit.toJson()) }.toString()
-        val result = api.decode<XmpCatalogEditResponse>(api.post("${path(sourceId, kind)}/edits", body).body)
+        val result = api.decode<XmpCatalogEditResponse>(api.post("${path(sourceId, kind)}/edits", body, lane = XmpLane.AGENT).body)
         return result.did ?: ""
     }
 

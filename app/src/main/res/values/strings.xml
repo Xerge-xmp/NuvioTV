@@ -3505,8 +3505,11 @@
     <string name="xmp_server_refresh_description">Read your playlists again from XMPlayer</string>
     <string name="xmp_server_retry">Retry</string>
     <string name="xmp_server_problem_offline">Your XMPlayer DVR agent is offline</string>
-    <string name="xmp_server_status_agent_offline">DVR agent offline</string>
+    <string name="xmp_server_status_agent_offline">DVR agent not answering</string>
     <string name="xmp_server_problem_offline_message">Your playlists are read and edited through the XMPlayer DVR agent. Start it, then retry.</string>
+    <string name="xmp_server_problem_not_answering">Your XMPlayer DVR agent is not answering</string>
+    <string name="xmp_server_problem_not_answering_message">It is running but did not answer in time. Retry; if it keeps happening, restart the DVR agent.</string>
+    <string name="xmp_library_agent_away">Your XMPlayer categories come through the XMPlayer DVR agent, and it is not answering. Start or restart it, then open this tab again.</string>
     <string name="xmp_server_problem_no_agent">Needs the XMPlayer DVR agent</string>
     <string name="xmp_server_problem_no_agent_message">Install the XMPlayer DVR agent on a computer at home to edit your playlists from Nuvio.</string>
     <string name="xmp_server_problem_premium">Needs XMPlayer Premium or Pro</string>

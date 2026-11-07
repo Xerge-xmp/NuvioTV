@@ -134,6 +134,13 @@ internal data class XmpTokenResponse(
 
 enum class XmpHttpMethod { GET, POST }
 
+/**
+ * Which way a request travels. [API]: answered by the Sync API itself and counted in the plan's reads / writes a minute,
+ * one at a time. [AGENT]: the catalog (`/v1/catalog…`), which the Sync API hands to the account's XMPlayer DVR agent and
+ * does not count — several run at once, and an agent that is away answers every request waiting with it once.
+ */
+enum class XmpLane { API, AGENT }
+
 class XmpHttpRequest(
     val method: XmpHttpMethod,
     val path: String,
@@ -142,7 +149,8 @@ class XmpHttpRequest(
     val form: Map<String, String>? = null,
     val accessToken: String? = null,
     val limitKey: String = "public",
-    val retrySafe: Boolean = method == XmpHttpMethod.GET
+    val retrySafe: Boolean = method == XmpHttpMethod.GET,
+    val lane: XmpLane = XmpLane.API
 ) {
     override fun toString(): String = "XmpHttpRequest(method=$method)"
 }

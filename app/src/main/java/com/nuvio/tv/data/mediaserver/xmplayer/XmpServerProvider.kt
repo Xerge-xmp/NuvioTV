@@ -365,9 +365,10 @@ class XmpServerProvider(
     }
 }
 
-/** No XMPlayer DVR agent of the account can answer right now: none at all, none online, or one still starting. */
+/** No XMPlayer DVR agent of the account can answer right now: none at all, none online, one still starting, or one stuck. */
 internal fun XmpApiException.isAgentAway(): Boolean =
-    code == "no_agent" || code == "no_answering_device" || code == "agent_offline" || code == "agent_not_ready" || status == 503
+    code == "no_agent" || code == "no_answering_device" || code == "agent_offline" || code == "agent_not_ready" ||
+        code == "agent_timeout" || status == 503
 
 /** How an XMPlayer answer reads as a media-server failure (the editor shows its own, more exact messages). */
 fun Throwable.toServerFailure(): ServerFailure = when (this) {
@@ -376,7 +377,8 @@ fun Throwable.toServerFailure(): ServerFailure = when (this) {
     is XmpApiException -> when {
         code == "scope_required" || status == 401 -> ServerFailure.AUTH_REQUIRED
         code == "premium_required" || code == "source_not_in_profile" || status == 403 -> ServerFailure.FORBIDDEN
-        code == "no_answering_device" || code == "agent_offline" || status == 503 -> ServerFailure.UNREACHABLE
+        // No agent online, or one connected that did not answer within the Sync API's wait (busy or stuck).
+        code == "no_answering_device" || code == "agent_offline" || code == "agent_timeout" || status == 503 -> ServerFailure.UNREACHABLE
         code == "no_agent" -> ServerFailure.UNSUPPORTED
         status == 404 -> ServerFailure.NOT_FOUND
         else -> ServerFailure.FAILED
