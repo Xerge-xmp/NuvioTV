@@ -90,7 +90,7 @@ private const val DAY_CHIPS = 3
 @Composable
 fun CalendarScreen(
     viewModel: CalendarViewModel = hiltViewModel(),
-    onOpenTitle: (itemId: String, itemType: String) -> Unit,
+    onOpenTitle: (itemId: String, itemType: String, season: Int?, episode: Int?) -> Unit,
     onPlayUrl: (url: String, title: String) -> Unit,
 ) {
     val s by viewModel.state.collectAsState()
@@ -105,7 +105,10 @@ fun CalendarScreen(
 
     val openEntry: (CalEntry) -> Unit = { e ->
         when (e.kind) {
-            "release" -> onOpenTitle("tmdb:${e.tmdbId}", if (e.mediaType == "series") "series" else "movie")
+            "release" -> scope.launch {
+                val t = viewModel.openTarget(e)
+                onOpenTitle(t.itemId, if (e.mediaType == "series") "series" else "movie", t.season, t.episode)
+            }
             "dvr" -> dvrFor = e
             "custom" -> formFor = null to e
         }

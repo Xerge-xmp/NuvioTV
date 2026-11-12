@@ -127,6 +127,28 @@ data class XmpCalendarItem(
     val isEvent: Boolean get() = kind == "custom"
 }
 
+/** XMPlayer's episode identity (the atlas): one show's episode on an air date, in TMDB's and the add-ons' numbering. */
+@Serializable
+internal data class XmpEpisodeNumber(val season: Int? = null, val episode: Int? = null)
+
+@Serializable
+internal data class XmpEpisodeEntry(val imdb: XmpEpisodeNumber? = null, val tmdb: XmpEpisodeNumber? = null)
+
+@Serializable
+internal data class XmpEpisodeSeries(val tmdb: String? = null, val imdb: String? = null)
+
+@Serializable
+internal data class XmpEpisodeAnswer(
+    val series: XmpEpisodeSeries? = null,
+    val found: Boolean = false,
+    val ambiguous: Boolean = false,
+    val matchedBy: String? = null,
+    val episode: XmpEpisodeEntry? = null,
+)
+
+/** Where a TV release opens: the series (by its IMDb id when known) and the episode in the add-ons' numbering. */
+data class XmpEpisodeTarget(val itemId: String, val season: Int?, val episode: Int?)
+
 @Serializable
 internal data class XmpCalendarResponse(val items: List<XmpCalendarItem> = emptyList())
 
@@ -141,6 +163,24 @@ class XmpCalendarClient(private val api: XmpApiClient, private val catalog: XmpC
     /** The profile's bells + own events. */
     suspend fun items(): List<XmpCalendarItem> =
         api.decode<XmpCalendarResponse>(api.get("/v1/calendar").body).items.filter { it.id.isNotBlank() && it.startAt > 0 }
+
+    /**
+     * THE EPISODE THAT AIRS ON [airDate] ("yyyy-mm-dd"), IN THE ADD-ONS' NUMBERING. TMDB and IMDb/Cinemeta number some
+     * shows differently (TMDB's Detective Conan S1E1220 is Cinemeta's 34:33), and the stream add-ons are asked by the
+     * IMDb side. XMPlayer's atlas answers both for a show + air date (`/v1/episode`); [title] breaks a tie. Null when it
+     * has no single answer — the caller then opens the series without picking an episode.
+     */
+    suspend fun episodeOnDate(tmdbId: String, airDate: String, title: String): XmpEpisodeTarget? {
+        val q = buildMap { put("tmdb", tmdbId); put("date", airDate); if (title.isNotBlank()) put("title", title) }
+        val a = api.decode<XmpEpisodeAnswer>(api.get("/v1/episode", q).body)
+        val imdbShow = a.series?.imdb?.takeIf { it.startsWith("tt") }
+        val n = a.episode?.imdb?.takeIf { a.found && !a.ambiguous }
+        val s = n?.season?.takeIf { it >= 0 }
+        val e = n?.episode?.takeIf { it > 0 }
+        Log.i("XmpCalendar", "CAL| episode tv:$tmdbId $airDate -> show=${imdbShow ?: "-"} imdb=${s ?: "-"}:${e ?: "-"} (${a.matchedBy ?: if (a.ambiguous) "ambiguous" else "none"})")
+        if (imdbShow == null) return null
+        return XmpEpisodeTarget(imdbShow, if (e != null) s else null, e)
+    }
 
     /** Every recording of the profile: scheduled, recording and recorded (the calendar shows all three). */
     suspend fun recordings(): List<XmpRecording> = catalog.allRecordings()

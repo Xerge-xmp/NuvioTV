@@ -147,6 +147,19 @@ class CalendarViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Where a release opens: a movie by its TMDB id; a series episode on its series page, focused on the episode that airs
+     * that day IN THE ADD-ONS' NUMBERING (the atlas through XMPlayer), so the add-ons are asked for the right one.
+     */
+    suspend fun openTarget(e: CalEntry): com.nuvio.tv.data.xmplayer.XmpEpisodeTarget {
+        val plain = com.nuvio.tv.data.xmplayer.XmpEpisodeTarget("tmdb:${e.tmdbId}", null, null)
+        if (e.mediaType != "series" || !authStore.state.value.isAuthenticated) return plain
+        return withContext(Dispatchers.IO) {
+            runCatching { calendar.episodeOnDate(e.tmdbId, e.dayKey(), e.episodeTitle) }
+                .onFailure { Log.w(TAG, "CAL| episode lookup failed: $it") }.getOrNull()
+        } ?: plain
+    }
+
     /** A finished recording's 6-hour link (dvr:read). */
     suspend fun recordingUrl(id: String): String? =
         withContext(Dispatchers.IO) { runCatching { catalog.recordingPlaylist(id) }.onFailure { Log.w(TAG, "CAL| recording link failed: $it") }.getOrNull() }
