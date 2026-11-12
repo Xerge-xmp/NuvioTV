@@ -106,6 +106,8 @@ class MetaDetailsViewModel @Inject constructor(
     private val metaDetailsSessionState: MetaDetailsSessionState,
     private val watchedSeriesStateHolder: com.nuvio.tv.data.local.WatchedSeriesStateHolder,
     val posterOptions: com.nuvio.tv.ui.components.posteroptions.PosterOptionsController,
+    private val xmpCalendar: com.nuvio.tv.data.xmplayer.XmpCalendarClient,
+    private val xmpAuthStore: com.nuvio.tv.data.xmplayer.XmpAuthStore,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private val itemId: String = savedStateHandle["itemId"] ?: ""
@@ -164,6 +166,7 @@ class MetaDetailsViewModel @Inject constructor(
 
     init {
         posterOptions.bind(viewModelScope)
+        observeAtlasEpisodeStills()
         observeMetaViewSettings()
         observeTrailerAutoplaySettings()
         observeTraktCommentsAvailability()
@@ -1550,6 +1553,31 @@ class MetaDetailsViewModel @Inject constructor(
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * EPISODE PICTURES FROM THE ATLAS (XMPlayer edition, MD/NUVIO_EPISODE_IMAGES_SPEC.md): for the season on screen, one
+     * request per show + season gives TMDB's still of each episode, matched across numberings; a card uses it only when
+     * its own (add-on) image does not load. Needs the XMPlayer connection; nothing changes without one.
+     */
+    private fun observeAtlasEpisodeStills() {
+        viewModelScope.launch {
+            _uiState.map { s -> s.meta?.takeIf { it.apiType in listOf("series", "tv") } to s.selectedSeason }
+                .distinctUntilChanged { a, b -> a.first?.id == b.first?.id && a.second == b.second }
+                .collect { (meta, season) ->
+                    val imdb = (meta?.imdbId ?: meta?.id)?.substringBefore(':')?.takeIf { it.startsWith("tt") } ?: return@collect
+                    if (!xmpAuthStore.state.value.isAuthenticated) return@collect
+                    if (!com.nuvio.tv.data.xmplayer.XmpEpisodeStills.claim(imdb, season)) return@collect
+                    launch(Dispatchers.IO) {
+                        runCatching { xmpCalendar.seasonStills(imdb, season) }
+                            .onSuccess { com.nuvio.tv.data.xmplayer.XmpEpisodeStills.put(it) }
+                            .onFailure {
+                                com.nuvio.tv.data.xmplayer.XmpEpisodeStills.release(imdb, season)
+                                Log.w(TAG, "atlas episode stills $imdb S$season failed: $it")
+                            }
+                    }
+                }
         }
     }
 

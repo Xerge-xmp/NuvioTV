@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -747,9 +748,15 @@ private fun EpisodeCard(
     val badgeShape = remember(cardMetrics.episodeBadgeCornerRadius) { RoundedCornerShape(cardMetrics.episodeBadgeCornerRadius) }
     val progressBgColor = remember { Color.Black.copy(alpha = 0.45f) }
     val notStartedBadgeColor = remember(textSecondary) { textSecondary.copy(alpha = 0.9f) }
-    val thumbnailRequest = remember(context, episode.thumbnail, thumbnailWidthPx, thumbnailHeightPx, shouldBlur) {
+    // THE ATLAS'S PICTURE when the add-on's does not load (XMPlayer edition, MD/NUVIO_EPISODE_IMAGES_SPEC.md): TMDB's still
+    // of this very episode, matched across numberings. The add-on's own image is always tried first.
+    val atlasStills by com.nuvio.tv.data.xmplayer.XmpEpisodeStills.byEpisodeId.collectAsState()
+    val atlasStill = atlasStills[episode.id]
+    var addonImageFailed by remember(episode.thumbnail) { mutableStateOf(false) }
+    val thumbnailData = if (episode.thumbnail.isNullOrBlank() || addonImageFailed) atlasStill ?: episode.thumbnail else episode.thumbnail
+    val thumbnailRequest = remember(context, thumbnailData, thumbnailWidthPx, thumbnailHeightPx, shouldBlur) {
         ImageRequest.Builder(context)
-            .data(episode.thumbnail)
+            .data(thumbnailData)
             .crossfade(true)
             .size(width = thumbnailWidthPx, height = thumbnailHeightPx)
             .apply {
@@ -898,6 +905,7 @@ private fun EpisodeCard(
                 // The card announces the episode title through FocusMarqueeText below, so the
                 // artwork must not repeat it.
                 contentDescription = null,
+                onError = { if (thumbnailData == episode.thumbnail) addonImageFailed = true },
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {

@@ -182,6 +182,23 @@ class XmpCalendarClient(private val api: XmpApiClient, private val catalog: XmpC
         return XmpEpisodeTarget(imdbShow, if (e != null) s else null, e)
     }
 
+    /**
+     * One season of a show in the add-ons' numbering with TMDB's still of each episode (Sync API /v1/episodes -> the atlas,
+     * MD/NUVIO_EPISODE_IMAGES_SPEC.md), as add-on episode id ("tt0131179:34:34") -> image URL. Episodes without a still are left out.
+     */
+    suspend fun seasonStills(imdbId: String, season: Int): Map<String, String> {
+        val a = api.decode<XmpSeasonAnswer>(api.get("/v1/episodes", mapOf("imdb" to imdbId, "season" to season.toString())).body)
+        val show = a.series?.imdb?.takeIf { it.startsWith("tt") } ?: imdbId
+        val out = a.episodes.mapNotNull { e ->
+            val s = e.imdb?.season ?: return@mapNotNull null
+            val n = e.imdb.episode ?: return@mapNotNull null
+            val still = e.still?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            "$show:$s:$n" to (if (still.startsWith("http")) still else "https://image.tmdb.org/t/p/w500$still")
+        }.toMap()
+        Log.i("XmpCalendar", "EPSTILLS| $imdbId season $season -> ${a.episodes.size} episodes, ${out.size} stills")
+        return out
+    }
+
     /** Every recording of the profile: scheduled, recording and recorded (the calendar shows all three). */
     suspend fun recordings(): List<XmpRecording> = catalog.allRecordings()
 
