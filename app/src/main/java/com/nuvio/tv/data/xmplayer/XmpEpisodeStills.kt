@@ -30,6 +30,24 @@ object XmpEpisodeStills {
     }
 
     fun forEpisode(map: Map<String, String>, videoId: String?): String? = videoId?.let { map[it] }
+
+    /**
+     * THE SERIES' OWN PICTURE, by show id (owner 2026-11-11: "when an episode has no image, it should show the series'
+     * card"): the last step of an episode card — the episode's image, else the atlas's still, else this.
+     */
+    private val art = MutableStateFlow<Map<String, String>>(emptyMap())
+    val seriesArt: StateFlow<Map<String, String>> = art.asStateFlow()
+
+    fun putSeriesArt(showId: String, url: String?) {
+        if (showId.isBlank() || url.isNullOrBlank()) return
+        if (art.value[showId] != url) art.update { it + (showId to url) }
+    }
+
+    /** The picture of the series an episode id ("tt0131179:34:35") belongs to. */
+    fun seriesArtFor(map: Map<String, String>, videoId: String?): String? {
+        val id = videoId ?: return null
+        return map.entries.firstOrNull { (show, _) -> id == show || id.startsWith("$show:") }?.value
+    }
 }
 
 @Serializable

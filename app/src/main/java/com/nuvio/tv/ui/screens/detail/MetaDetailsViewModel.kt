@@ -1566,6 +1566,12 @@ class MetaDetailsViewModel @Inject constructor(
             _uiState.map { s -> s.meta?.takeIf { it.apiType in listOf("series", "tv") } to s.selectedSeason }
                 .distinctUntilChanged { a, b -> a.first?.id == b.first?.id && a.second == b.second }
                 .collect { (meta, season) ->
+                    // The series' own picture: the episode card's last step when neither the episode nor the atlas has one.
+                    meta?.let { m ->
+                        val pic = m.background?.takeIf { it.isNotBlank() } ?: m.poster
+                        com.nuvio.tv.data.xmplayer.XmpEpisodeStills.putSeriesArt(m.id, pic)
+                        m.imdbId?.let { com.nuvio.tv.data.xmplayer.XmpEpisodeStills.putSeriesArt(it, pic) }
+                    }
                     val imdb = (meta?.imdbId ?: meta?.id)?.substringBefore(':')?.takeIf { it.startsWith("tt") } ?: return@collect
                     if (!xmpAuthStore.state.value.isAuthenticated) return@collect
                     if (!com.nuvio.tv.data.xmplayer.XmpEpisodeStills.claim(imdb, season)) return@collect

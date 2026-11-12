@@ -752,8 +752,16 @@ private fun EpisodeCard(
     // of this very episode, matched across numberings. The add-on's own image is always tried first.
     val atlasStills by com.nuvio.tv.data.xmplayer.XmpEpisodeStills.byEpisodeId.collectAsState()
     val atlasStill = atlasStills[episode.id]
+    // ...and the SERIES' picture when neither has one (owner 2026-11-11: "it should show the series' card").
+    val seriesArtMap by com.nuvio.tv.data.xmplayer.XmpEpisodeStills.seriesArt.collectAsState()
+    val seriesArt = com.nuvio.tv.data.xmplayer.XmpEpisodeStills.seriesArtFor(seriesArtMap, episode.id)
     var addonImageFailed by remember(episode.thumbnail) { mutableStateOf(false) }
-    val thumbnailData = if (episode.thumbnail.isNullOrBlank() || addonImageFailed) atlasStill ?: episode.thumbnail else episode.thumbnail
+    var atlasImageFailed by remember(atlasStill) { mutableStateOf(false) }
+    val thumbnailData = when {
+        !episode.thumbnail.isNullOrBlank() && !addonImageFailed -> episode.thumbnail
+        atlasStill != null && !atlasImageFailed -> atlasStill
+        else -> seriesArt ?: episode.thumbnail
+    }
     val thumbnailRequest = remember(context, thumbnailData, thumbnailWidthPx, thumbnailHeightPx, shouldBlur) {
         ImageRequest.Builder(context)
             .data(thumbnailData)
@@ -905,7 +913,12 @@ private fun EpisodeCard(
                 // The card announces the episode title through FocusMarqueeText below, so the
                 // artwork must not repeat it.
                 contentDescription = null,
-                onError = { if (thumbnailData == episode.thumbnail) addonImageFailed = true },
+                onError = {
+                    when (thumbnailData) {
+                        episode.thumbnail -> addonImageFailed = true
+                        atlasStill -> atlasImageFailed = true
+                    }
+                },
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
