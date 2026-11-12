@@ -4,6 +4,7 @@ import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -176,7 +178,9 @@ internal fun EventDialog(
     var lead by remember { mutableStateOf(entry?.reminderLeadMs?.let { (it / 60_000).toInt() }) }
     var editing by remember { mutableStateOf(false) }
     val titleFocus = remember { FocusRequester() }
+    val dateFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     fun bump(field: Int, delta: Int) { cal = (cal.clone() as Calendar).apply { add(field, delta) } }
 
     NuvioDialog(onDismiss = onDismiss, title = stringResource(if (entry == null) R.string.xmp_cal_create_event else R.string.xmp_cal_edit_event), width = 620.dp) {
@@ -188,10 +192,33 @@ internal fun EventDialog(
                 .onFocusChanged { if (!it.isFocused) editing = false }
                 .onPreviewKeyEvent { ev ->
                     val n = ev.nativeKeyEvent
-                    if (n.action == AndroidKeyEvent.ACTION_DOWN && (n.keyCode == AndroidKeyEvent.KEYCODE_DPAD_CENTER || n.keyCode == AndroidKeyEvent.KEYCODE_ENTER)) {
-                        editing = true; keyboard?.show()
+                    if (n.action != AndroidKeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
+                    when (n.keyCode) {
+                        AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER -> {
+                            if (!editing) { editing = true; keyboard?.show() }
+                            false
+                        }
+                        // While typing the field held the remote: DOWN / UP did nothing and BACK never closed the form. Now
+                        // they end the typing and leave the field; BACK ends the typing (a second BACK closes the form).
+                        // DOWN always leaves for the date row, by name: the one-line field swallows DOWN itself (it moves its
+                        // cursor), and a focus SEARCH from it did not stick — measured: moved=true, focus back on the field.
+                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                            editing = false; keyboard?.hide()
+                            val ok = runCatching { dateFocus.requestFocus() }.isSuccess
+                            android.util.Log.i("XmpCalendar", "CAL| title -> date row ok=$ok")
+                            true
+                        }
+                        AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                            if (editing) { editing = false; keyboard?.hide() }
+                            true
+                        }
+                        AndroidKeyEvent.KEYCODE_BACK -> {
+                            if (!editing) return@onPreviewKeyEvent false
+                            editing = false; keyboard?.hide()
+                            true
+                        }
+                        else -> false
                     }
-                    false
                 },
             readOnly = !editing, singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -206,7 +233,7 @@ internal fun EventDialog(
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.xmp_cal_date), color = NuvioTheme.colors.TextTertiary, fontSize = 12.sp, modifier = Modifier.width(56.dp))
-            Pill("‹", false) { bump(Calendar.DATE, -1) }
+            Pill("‹", false, Modifier.focusRequester(dateFocus)) { bump(Calendar.DATE, -1) }
             Text(SimpleDateFormat("EEE, MMM d yyyy", Locale.getDefault()).format(cal.time), color = NuvioTheme.colors.TextPrimary, fontSize = 15.sp, modifier = Modifier.width(180.dp))
             Pill("›", false) { bump(Calendar.DATE, 1) }
         }
@@ -214,9 +241,13 @@ internal fun EventDialog(
             Text(stringResource(R.string.xmp_cal_time), color = NuvioTheme.colors.TextTertiary, fontSize = 12.sp, modifier = Modifier.width(56.dp))
             if (!allDay) {
                 Pill("‹", false) { bump(Calendar.MINUTE, -15) }
-                Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(cal.time), color = NuvioTheme.colors.TextPrimary, fontSize = 15.sp, modifier = Modifier.width(90.dp))
+                Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(cal.time), color = NuvioTheme.colors.TextPrimary, fontSize = 15.sp, modifier = Modifier.width(110.dp))
                 Pill("›", false) { bump(Calendar.MINUTE, 15) }
-            }
+            } else Text(stringResource(R.string.xmp_cal_all_day), color = NuvioTheme.colors.TextSecondary, fontSize = 15.sp)
+        }
+        // All day + Weekly on their own row: beside the time they were crushed into a sliver (owner screenshot: "broken.").
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.width(56.dp))
             Pill(stringResource(R.string.xmp_cal_all_day), allDay) { allDay = !allDay }
             Pill(stringResource(R.string.xmp_cal_weekly), weekly) { weekly = !weekly }
         }
