@@ -1553,6 +1553,12 @@ class MetaDetailsViewModel @Inject constructor(
         }
     }
 
+    /** The day before and after "yyyy-mm-dd". */
+    private fun neighbourDays(day: String): List<String> = runCatching {
+        val d = java.time.LocalDate.parse(day)
+        listOf(d.minusDays(1).toString(), d.plusDays(1).toString())
+    }.getOrDefault(emptyList())
+
     private suspend fun enrichMeta(meta: Meta): Meta {
         val settings = tmdbSettingsDataStore.settings.first()
         if (!settings.enabled) return meta
@@ -1664,11 +1670,30 @@ class MetaDetailsViewModel @Inject constructor(
             }
         }
 
-        if (!episodeMap.isNullOrEmpty()) {
+        // EPISODES TMDB NUMBERS OTHERWISE (XMPlayer edition): the ones the add-on's season / episode did not find on TMDB are
+        // matched by AIR DATE in TMDB's own seasons (exact day, then one day either side — the XMPlayer atlas's rule).
+        val unmatchedDates = if (needsEpisodes) meta.videos.filter { v ->
+            val key = if (v.season != null && v.episode != null) v.season to v.episode else null
+            (key == null || episodeMap?.containsKey(key) != true) && (v.released?.length ?: 0) >= 10
+        }.mapNotNull { it.released?.take(10) }.toSet() else emptySet()
+        val byAirDate = if (unmatchedDates.isNotEmpty()) {
+            runCatching {
+                tmdbMetadataService.fetchEpisodeEnrichmentByAirDate(tmdbId, unmatchedDates + unmatchedDates.flatMap { neighbourDays(it) }, settings.language)
+            }.getOrDefault(emptyMap())
+        } else emptyMap()
+        if (unmatchedDates.isNotEmpty()) Log.i(TAG, "TMDB episodes by air date: ${unmatchedDates.size} unmatched, ${byAirDate.size} TMDB days")
+        fun episodeByAirDate(released: String?): com.nuvio.tv.core.tmdb.TmdbEpisodeEnrichment? {
+            val day = released?.takeIf { it.length >= 10 }?.take(10) ?: return null
+            byAirDate[day]?.let { return it }
+            val near = neighbourDays(day).mapNotNull { byAirDate[it] }
+            return near.singleOrNull()
+        }
+
+        if (!episodeMap.isNullOrEmpty() || byAirDate.isNotEmpty()) {
             updated = updated.copy(
                 videos = meta.videos.map { video ->
                     val key = if (video.season != null && video.episode != null) video.season to video.episode else null
-                    val ep = key?.let { episodeMap[it] }
+                    val ep = key?.let { episodeMap?.get(it) } ?: episodeByAirDate(video.released)
                     video.copy(
                         title = if (settings.useEpisodes) ep?.title ?: video.title else video.title,
                         overview = if (settings.useEpisodes) ep?.overview ?: video.overview else video.overview,

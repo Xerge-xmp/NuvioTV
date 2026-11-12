@@ -657,6 +657,47 @@ class TmdbMetadataService(
         }
     }
 
+    /**
+     * TMDB's episodes BY AIR DATE ("yyyy-mm-dd" -> the one episode TMDB has on that day), from the seasons TMDB itself
+     * has around [dates]. For a show the add-on numbers differently from TMDB (Detective Conan: Cinemeta S34E34, TMDB
+     * S1E1220), asking TMDB for the add-on's season finds nothing, and its episode cards stayed blank; the air date is
+     * what both sides agree on. A day with two TMDB episodes is left out (no guessing).
+     */
+    suspend fun fetchEpisodeEnrichmentByAirDate(
+        tmdbId: String,
+        dates: Set<String>,
+        language: String = "en"
+    ): Map<String, TmdbEpisodeEnrichment> = withContext(ioDispatcher) {
+        if (dates.isEmpty()) return@withContext emptyMap()
+        val numericId = tmdbId.toIntOrNull() ?: return@withContext emptyMap()
+        val seasons = try {
+            tmdbApi.getTvDetails(numericId, TMDB_API_KEY, "en").body()?.seasons.orEmpty()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to fetch TMDB seasons for $tmdbId: ${e.message}")
+            emptyList()
+        }
+            .filter { (it.seasonNumber ?: 0) > 0 && (it.episodeCount ?: 0) > 0 }
+            .sortedBy { it.seasonNumber }
+        if (seasons.isEmpty()) return@withContext emptyMap()
+        val first = dates.min()
+        val last = dates.max()
+        // The seasons whose run can hold the dates: started on or before the last date, and the next one did not start
+        // before the first date.
+        val wanted = seasons.filterIndexed { i, s ->
+            val start = s.airDate?.takeIf { it.length >= 10 } ?: return@filterIndexed true
+            val nextStart = seasons.getOrNull(i + 1)?.airDate?.takeIf { it.length >= 10 }
+            start <= last && (nextStart == null || nextStart >= first)
+        }.mapNotNull { it.seasonNumber }.take(6)
+        if (wanted.isEmpty()) return@withContext emptyMap()
+        val episodes = fetchEpisodeEnrichment(tmdbId, wanted, language)
+        episodes.values.filter { !it.airDate.isNullOrBlank() }
+            .groupBy { it.airDate!!.take(10) }
+            .filterValues { it.size == 1 }
+            .mapValues { it.value.first() }
+    }
+
     suspend fun fetchMoreLikeThis(
         tmdbId: String,
         contentType: ContentType,
