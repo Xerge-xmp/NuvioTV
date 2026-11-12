@@ -141,6 +141,8 @@ sealed class Screen(val route: String) {
     data object Search : Screen("search")
     data object Discover : Screen("discover")
     data object Library : Screen("library")
+    /** XMPlayer's calendar (XMPlayer edition, MD/NUVIO_CALENDAR_SPEC.md): releases, DVR recordings, bells + own events. */
+    data object Calendar : Screen("calendar")
     data object Settings : Screen("settings")
     data object Tracking : Screen("trakt")
     data object WatchParty : Screen("watch_party?code={code}") {

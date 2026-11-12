@@ -161,6 +161,10 @@ class XmpCatalogClient(private val api: XmpApiClient) {
     suspend fun recordings(): List<XmpRecording> =
         api.decode<XmpRecordingsResponse>(api.get("/v1/dvr", mapOf("status" to "completed")).body).recordings
 
+    /** Every recording of the profile — scheduled, recording and recorded (the calendar shows all three). */
+    suspend fun allRecordings(): List<XmpRecording> =
+        api.decode<XmpRecordingsResponse>(api.get("/v1/dvr").body).recordings
+
     /** A 6-hour HLS link for one finished recording. */
     suspend fun recordingPlaylist(recordingId: String): String =
         api.decode<XmpRecordingPlayback>(api.get("/v1/dvr/${segment(recordingId)}/playback").body).playlist

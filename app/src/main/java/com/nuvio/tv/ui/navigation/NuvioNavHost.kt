@@ -1211,6 +1211,13 @@ private fun PlaybackNavHost(
             )
         }
 
+        composable(Screen.Calendar.route) {
+            com.nuvio.tv.ui.screens.calendar.CalendarScreen(
+                onOpenTitle = { itemId, itemType -> navController.navigate(Screen.Detail.createRoute(itemId, itemType)) },
+                onPlayUrl = { url, title -> navController.navigate(Screen.Player.createRoute(streamUrl = url, title = title, streamName = "XMPlayer DVR", contentType = "dvr")) },
+            )
+        }
+
         composable(Screen.Library.route) {
             LibraryScreen(
                 showBuiltInHeader = !hideBuiltInHeaders,

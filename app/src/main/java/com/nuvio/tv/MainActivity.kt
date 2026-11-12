@@ -49,6 +49,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
@@ -1051,6 +1052,7 @@ open class MainActivity : ComponentActivity() {
                             add(Screen.Home.route)
                             add(Screen.Search.route)
                             add(Screen.Library.route)
+                            add(Screen.Calendar.route)
                             add(Screen.Settings.route)
                             if (discoverLocation == DiscoverLocation.IN_SIDEBAR) {
                                 add(Screen.Discover.route)
@@ -1063,12 +1065,14 @@ open class MainActivity : ComponentActivity() {
                     val strNavSearch = stringResource(R.string.nav_search)
                     val strNavLibrary = stringResource(R.string.nav_library)
                     val strNavSettings = stringResource(R.string.nav_settings)
+                    val strNavCalendar = stringResource(R.string.nav_calendar)
                     val drawerItems = remember(
                         strNavHome,
                         strNavDiscover,
                         strNavSearch,
                         strNavLibrary,
                         strNavSettings,
+                        strNavCalendar,
                         discoverLocation
                     ) {
                         buildList {
@@ -1100,6 +1104,13 @@ open class MainActivity : ComponentActivity() {
                                     route = Screen.Library.route,
                                     label = strNavLibrary,
                                     iconRes = R.raw.sidebar_library
+                                )
+                            )
+                            add(
+                                DrawerItem(
+                                    route = Screen.Calendar.route,
+                                    label = strNavCalendar,
+                                    icon = Icons.Default.DateRange
                                 )
                             )
                             add(
@@ -1707,6 +1718,8 @@ private fun LegacySidebarScaffold(
                     startDestination = startDestination,
                     hideBuiltInHeaders = hideBuiltInHeaders
                 )
+                // XMPlayer's calendar: a bell / own event going off shows here (the TV hides system notifications).
+                com.nuvio.tv.ui.screens.calendar.XmpReminderPopoutHost()
             }
         }
     }
@@ -2109,6 +2122,8 @@ private fun ModernSidebarScaffold(
                     startDestination = startDestination,
                     hideBuiltInHeaders = hideBuiltInHeaders
                 )
+                // XMPlayer's calendar: a bell / own event going off shows here (the TV hides system notifications).
+                com.nuvio.tv.ui.screens.calendar.XmpReminderPopoutHost()
             }
         }
 

@@ -216,6 +216,7 @@ internal object ProbeCommands {
             "search" -> Screen.Search.route
             "discover" -> Screen.Discover.route
             "library" -> Screen.Library.route
+            "calendar" -> Screen.Calendar.route
             "settings" -> Screen.Settings.route
             "tracking", "trakt" -> Screen.Tracking.route
             "addons" -> Screen.AddonManager.route

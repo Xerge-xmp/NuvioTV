@@ -25,7 +25,7 @@ data class XmpConfiguration(
  */
 internal const val XMP_SCOPES =
     "profile:read favorites:read favorites:write history:read history:write collections:read collections:write ratings:read ratings:write " +
-        "dvr:read catalog:read catalog:write trakt:bridge simkl:bridge"
+        "dvr:read catalog:read catalog:write trakt:bridge simkl:bridge calendar:read calendar:write"
 
 enum class XmpAuthError {
     MISSING_CLIENT_ID,

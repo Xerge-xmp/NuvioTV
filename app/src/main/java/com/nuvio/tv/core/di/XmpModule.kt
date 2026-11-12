@@ -111,6 +111,16 @@ object XmpModule {
         )
     )
 
+    /** XMPlayer's calendar in Nuvio: the profile's bells + own events (and its recordings through the catalog's connection). */
+    @Provides
+    @Singleton
+    fun calendar(api: XmpApiClient, catalog: XmpCatalogClient) = com.nuvio.tv.data.xmplayer.XmpCalendarClient(api, catalog)
+
+    /** The Releases dataset every XMPlayer surface reads (public, no sign-in). */
+    @Provides
+    @Singleton
+    fun releases() = com.nuvio.tv.data.xmplayer.XmpReleasesClient()
+
     /**
      * Trakt and Simkl through XMPlayer (the profile's own XMPlayer link; no provider key or token in Nuvio). Its own
      * connection, like the catalog: a link poll or a status read never waits behind sync.
